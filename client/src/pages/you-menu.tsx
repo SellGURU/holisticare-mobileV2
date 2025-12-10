@@ -785,7 +785,7 @@ export default function YouMenu() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        const url = `https://holisticare.vercel.app/questionary/${encodedMi}/${questionnaire.unique_id}`;
+                        const url = `https://holisticare-develop.vercel.app/questionary/${encodedMi}/${questionnaire.unique_id}/${questionnaire.forms_unique_id}`;
                         // setIframeUrl(url);
                         // setOpenIframe(true);
                         const newWindow = window.open(url, "_blank");

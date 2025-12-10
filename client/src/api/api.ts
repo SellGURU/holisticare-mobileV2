@@ -5,7 +5,7 @@ class Api {
   protected static base_url: string =
     //'https://vercel-backend-one-roan.vercel.app/holisticare';
     // 'https://vercel-backend-one-roan.vercel.app/holisticare';
-    "https://vercel-backend-one-roan.vercel.app/holisticare";
+    "https://vercel-backend-one-roan.vercel.app/holisticare_test";
   protected static post(url: string, data?: any, config?: any) {
     if (!config?.noPending) {
     }

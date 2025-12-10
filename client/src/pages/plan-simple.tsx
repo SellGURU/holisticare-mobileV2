@@ -848,7 +848,7 @@ export default function Plan() {
                 if (!task.Status) {
                   handleCheckTask(task.task_id);
                 }
-                const url = `https://holisticare.vercel.app/checkin/${encodedMi}/${task.task_id}`;
+                const url = `https://holisticare-develop.vercel.app/checkin/${encodedMi}/${task.task_id}`;
                 const newWindow = window.open(url, "_blank");
                 if (newWindow) {
                   setOpenedWindow(newWindow);
