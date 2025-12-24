@@ -212,10 +212,14 @@ export default function ProfileHeader() {
   const handleLogout = async () => {
     Auth.logOut();
     const brandInfo = localStorage.getItem("brand_info");
+    const biometricEnabled = localStorage.getItem("biometric_enabled");
     localStorage.clear();
     // Restore brand_info if it existed
     if (brandInfo) {
       localStorage.setItem("brand_info", brandInfo);
+    }
+    if (biometricEnabled) {
+      localStorage.setItem("biometric_enabled", biometricEnabled);
     }
     navigate("/");
     window.location.reload();

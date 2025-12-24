@@ -1,15 +1,33 @@
 import Auth from "@/api/auth";
+import ForgotPasswordModal from "@/components/auth/forgot-password-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { validateEmail, validatePassword } from "@/lib/utils";
-import { useLocation } from "wouter";
-import { Eye, EyeOff, LogIn, UserPlus } from "lucide-react";
+import { biometric } from "@/services/biometric";
+import { secureStorage } from "@/services/secureStorage";
+import { BiometryType } from "@aparajita/capacitor-biometric-auth";
+import {
+  Eye,
+  EyeOff,
+  Fingerprint,
+  LogIn,
+  ScanFace,
+  UserPlus,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import ForgotPasswordModal from "@/components/auth/forgot-password-modal";
+import { useLocation } from "wouter";
 // import logoImage from "@assets/logo.png";
 
 export default function AuthPage() {
@@ -49,6 +67,16 @@ export default function AuthPage() {
     confirmPassword: "",
     terms: false,
   });
+
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  useEffect(() => {
+    const biometricEnabled = localStorage.getItem("biometric_enabled");
+    if (biometricEnabled === "true") {
+      setBiometricEnabled(true);
+    } else {
+      setBiometricEnabled(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (stage === 1) {
@@ -99,43 +127,194 @@ export default function AuthPage() {
     });
   };
   const [location, navigate] = useLocation();
-  const CallLoginAuthApi = async (isRegister = false) => {
+  // const CallLoginAuthApi = async (
+  //   isRegister = false,
+  //   credentials?: { email: string; password: string }
+  // ) => {
+  //   setIsLoadingLogin(true);
+  //   const data = {
+  //     email: credentials?.email || loginData.email,
+  //     password: credentials?.password || loginData.password,
+  //   };
+  //   if (isRegister) {
+  //     data.email = registerData.email;
+  //     data.password = registerData.password;
+  //   }
+  //   Auth.login(data.email, data.password)
+  //     .then((res) => {
+  //       localStorage.setItem("health_session", res.data.access_token);
+  //       localStorage.setItem("token", res.data.access_token);
+  //       localStorage.setItem("encoded_mi", res.data.encoded_mi);
+  //       if (!isRegister) {
+  //         toast({
+  //           title: "Welcome back!",
+  //           description: "You have successfully signed in.",
+  //         });
+  //       }
+  //       setTimeout(() => {
+  //         navigate("/");
+  //         // window.location.reload();
+  //       }, 500);
+  //     })
+  //     .catch((res) => {
+  //       if (res.response.data.detail) {
+  //         if (
+  //           res.response.data.detail.includes("email") ||
+  //           res.response.data.detail.includes("Email")
+  //         ) {
+  //           setErrorsLogin({
+  //             ...errorsLogin,
+  //             email: res.response.data.detail,
+  //           });
+  //         } else if (
+  //           res.response.data.detail.includes("password") ||
+  //           res.response.data.detail.includes("Password")
+  //         ) {
+  //           setErrorsLogin({
+  //             ...errorsLogin,
+  //             password: res.response.data.detail,
+  //           });
+  //         } else {
+  //           setErrorsLogin({
+  //             ...errorsLogin,
+  //             email: res.response.data.detail,
+  //           });
+  //         }
+  //       }
+  //     })
+  //     .finally(() => {
+  //       setIsLoadingLogin(false);
+  //     });
+  // };
+  const [showBiometricModal, setShowBiometricModal] = useState(false);
+  const [pendingCredentials, setPendingCredentials] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
+  const [sessionData, setSessionData] = useState<any>(null);
+  const setLocalStorageData = (data: any) => {
+    localStorage.setItem("health_session", data.access_token);
+    localStorage.setItem("token", data.access_token);
+    localStorage.setItem("encoded_mi", data.encoded_mi);
+    localStorage.setItem("refresh_token", data.refresh_token);
+  };
+  const handleDisableBiometric = async () => {
+    await secureStorage.clear();
+    localStorage.removeItem("biometric_enabled");
+    setLocalStorageData(sessionData);
+
+    setPendingCredentials(null);
+    setShowBiometricModal(false);
+
+    setTimeout(() => {
+      navigate("/");
+    }, 500);
+  };
+  const handleEnableBiometric = async () => {
+    if (!pendingCredentials) return;
+    setLocalStorageData(sessionData);
+
+    await secureStorage.save(
+      pendingCredentials.email,
+      pendingCredentials.password
+    );
+
+    localStorage.setItem("biometric_enabled", "true");
+
+    toast({
+      title: "Biometric enabled",
+      description: "You can now login with biometric.",
+    });
+
+    setPendingCredentials(null);
+    setShowBiometricModal(false);
+    setTimeout(() => {
+      navigate("/");
+    }, 500);
+  };
+
+  const BiometricModal = () => {
+    return (
+      <Dialog
+        open={showBiometricModal}
+        onOpenChange={() => {
+          setShowBiometricModal(false);
+          navigate("/");
+        }}
+      >
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              🔐 Biometric Login
+            </DialogTitle>
+            <DialogDescription>
+              Do you allow us to use biometric authentication for future logins?
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="flex gap-2 justify-end flex-nowrap">
+            <Button variant="outline" onClick={handleDisableBiometric}>
+              Not now
+            </Button>
+            <Button onClick={handleEnableBiometric}>Enable</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  const CallLoginAuthApi = async (
+    isRegister = false,
+    credentials?: { email: string; password: string }
+  ) => {
     setIsLoadingLogin(true);
     const data = {
-      email: loginData.email,
-      password: loginData.password,
+      email: credentials?.email || loginData.email,
+      password: credentials?.password || loginData.password,
     };
     if (isRegister) {
       data.email = registerData.email;
       data.password = registerData.password;
     }
+
     Auth.login(data.email, data.password)
-      .then((res) => {
-        localStorage.setItem("health_session", res.data.access_token);
-        localStorage.setItem("token", res.data.access_token);
-        localStorage.setItem("encoded_mi", res.data.encoded_mi);
-        localStorage.setItem("refresh_token", res.data.refresh_token);
+      .then(async (res) => {
+        setSessionData(res.data);
         if (!isRegister) {
           toast({
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
+
+          const biometricEnabled = localStorage.getItem("biometric_enabled");
+          const isAvailable = await biometric.getBiometryType();
+          if (biometricEnabled !== "true" && isAvailable) {
+            setPendingCredentials({
+              email: data.email,
+              password: data.password,
+            });
+            setShowBiometricModal(true);
+          } else {
+            await secureStorage.save(data.email, data.password);
+            setLocalStorageData(res.data);
+            setTimeout(() => {
+              navigate("/");
+            }, 500);
+          }
+        } else {
+          setLocalStorageData(res.data);
+          setTimeout(() => {
+            navigate("/");
+          }, 500);
         }
-        setTimeout(() => {
-          navigate("/");
-          // window.location.reload();
-        }, 500);
       })
       .catch((res) => {
-        if (res.response.data.detail) {
+        if (res.response?.data?.detail) {
           if (
             res.response.data.detail.includes("email") ||
             res.response.data.detail.includes("Email")
           ) {
-            setErrorsLogin({
-              ...errorsLogin,
-              email: res.response.data.detail,
-            });
+            setErrorsLogin({ ...errorsLogin, email: res.response.data.detail });
           } else if (
             res.response.data.detail.includes("password") ||
             res.response.data.detail.includes("Password")
@@ -145,10 +324,7 @@ export default function AuthPage() {
               password: res.response.data.detail,
             });
           } else {
-            setErrorsLogin({
-              ...errorsLogin,
-              email: res.response.data.detail,
-            });
+            setErrorsLogin({ ...errorsLogin, email: res.response.data.detail });
           }
         }
       })
@@ -317,6 +493,41 @@ export default function AuthPage() {
   const handleForgotPasswordSuccess = () => {
     // Switch to login tab after successful password reset
     setCurrentTab("login");
+  };
+
+  const [biometryType, setBiometryType] = useState<BiometryType | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const type = await biometric.getBiometryType();
+      setBiometryType(type);
+    })();
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    const ok = await biometric.authenticate();
+    if (!ok) return;
+
+    const creds = await secureStorage.get();
+    if (!creds) {
+      localStorage.removeItem("biometric_enabled");
+      toast({
+        title: "No saved credentials",
+        description: "Please login first normally",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoginData({
+      email: creds.email as string,
+      password: creds.password as string,
+    });
+
+    CallLoginAuthApi(false, {
+      email: creds.email as string,
+      password: creds.password as string,
+    });
   };
 
   return (
@@ -537,6 +748,39 @@ export default function AuthPage() {
                       <LogIn className="w-4 h-4 mr-2" />
                       {isLoadingLogin ? "Logging in..." : "Log in"}
                     </Button>
+                    <div className="flex flex-col items-center">
+                      {biometryType && biometricEnabled && (
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={handleBiometricLogin}
+                            variant="outline"
+                            className="rounded-full p-4 h-16 w-16 border-2 border-primary/50 hover:bg-primary/10 transition-all"
+                            title="Login with Biometrics"
+                          >
+                            {biometryType === BiometryType.faceId ||
+                            biometryType === BiometryType.faceAuthentication ? (
+                              <ScanFace
+                                className="h-8 w-8 text-primary"
+                                strokeWidth={1.5}
+                              />
+                            ) : (
+                              <Fingerprint
+                                className="h-8 w-8 text-primary"
+                                strokeWidth={1.5}
+                              />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                      {biometryType && biometricEnabled && (
+                        <p className="text-center text-sm text-muted-foreground mt-2">
+                          {biometryType === BiometryType.faceId ||
+                          biometryType === BiometryType.faceAuthentication
+                            ? "Login with Face Recognition"
+                            : "Login with Fingerprint"}
+                        </p>
+                      )}
+                    </div>
                   </form>
 
                   {/* Test credentials button */}
@@ -768,6 +1012,7 @@ export default function AuthPage() {
         initialEmail={loginData.email}
         onSuccess={handleForgotPasswordSuccess}
       />
+      <BiometricModal />
     </div>
   );
 }

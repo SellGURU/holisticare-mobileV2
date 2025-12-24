@@ -60,6 +60,7 @@ import ProfileInfo from "./ProfileComponents/ProfileInfo";
 import AccountSetting from "./ProfileComponents/AccountSetting";
 import ChangePasswordDialog from "./ProfileComponents/ChangePasswordDialog";
 import { apiRequest } from "@/lib/queryClient";
+import { secureStorage } from "@/services/secureStorage";
 
 export default function Profile() {
   const { user, logout, fetchClientInformation } = useAuth();
@@ -329,8 +330,12 @@ export default function Profile() {
       const res = await Application.changePassword(payload);
       return res;
     },
-    onSuccess: (res: any) => {
+    onSuccess: async (res: any) => {
       if (res?.status === 200) {
+        const creds = await secureStorage.get();
+        if (creds) {
+          await secureStorage.save(creds.email, passwordData.newPassword);
+        }
         toast({
           title: "Password Changed",
           description: "Your password has been updated successfully.",
