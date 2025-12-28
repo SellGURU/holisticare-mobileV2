@@ -39,7 +39,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { RookAppleHealth } from "capacitor-rook-sdk";
 import { env, resolveBaseUrl } from "@/api/base";
@@ -198,12 +198,14 @@ export default function YouMenu() {
   const [openIframe, setOpenIframe] = useState(false);
   const [iframeUrl, setIframeUrl] = useState("");
   const [openedWindow, setOpenedWindow] = useState<Window | null>(null);
+  const wasHiddenRef = useRef(false);
   
   useEffect(() => {
     const handleMessage = (event: any) => {
       if (event.data?.type === "QUESTIONARY_SUBMITTED") {
         setOpenIframe(false);
         setIframeUrl("");
+        setOpenedWindow(null); // Clear opened window state
 
         handleIframeClosed();
       }
@@ -213,21 +215,6 @@ export default function YouMenu() {
 
     return () => window.removeEventListener("message", handleMessage);
   }, []);
-  
-  // Check if opened window is closed and refetch questionnaires
-  useEffect(() => {
-    if (!openedWindow) return;
-
-    const checkWindowClosed = setInterval(() => {
-      if (openedWindow.closed) {
-        handleGetAssignedQuestionaries();
-        setOpenedWindow(null);
-        clearInterval(checkWindowClosed);
-      }
-    }, 1000); // Check every second
-
-    return () => clearInterval(checkWindowClosed);
-  }, [openedWindow]);
   
   const handleIframeClosed = () => {
     handleGetAssignedQuestionaries();
@@ -259,19 +246,6 @@ export default function YouMenu() {
     Application.getClientInformation()
       .then((res) => {
         setClientInformation(res.data);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res.response.data.detail,
-          variant: "destructive",
-        });
-      });
-  };
-  const handleGetAssignedQuestionaries = async () => {
-    Application.getAssignedQuestionaries()
-      .then((res) => {
-        setQuestionnaires(res.data);
       })
       .catch((res) => {
         toast({
@@ -399,6 +373,80 @@ export default function YouMenu() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  const handleGetAssignedQuestionaries = async () => {
+    Application.getAssignedQuestionaries()
+      .then((res) => {
+        setQuestionnaires(res.data);
+      })
+      .catch((res) => {
+        toast({
+          title: "Error",
+          description: res.response.data.detail,
+          variant: "destructive",
+        });
+      });
+  };
+
+  // Check if opened window is closed and refetch questionnaires
+  // Only check window.closed on web platform, not on mobile (Android/iOS)
+  useEffect(() => {
+    if (!openedWindow) return;
+    
+    // Skip window.closed check on native platforms - rely on message listener instead
+    if (Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    const checkWindowClosed = setInterval(() => {
+      if (openedWindow.closed) {
+        handleGetAssignedQuestionaries();
+        setOpenedWindow(null);
+        clearInterval(checkWindowClosed);
+      }
+    }, 1000); // Check every second
+
+    return () => clearInterval(checkWindowClosed);
+  }, [openedWindow]);
+
+  // Listen for app state changes and page visibility changes to refresh questionnaires
+  // This works even if the window is still open - refreshes when user returns to app
+  useEffect(() => {
+    if (!openedWindow) return;
+
+    // Handle app state changes for native platforms
+    let appStateListener: any = null;
+    if (Capacitor.isNativePlatform()) {
+      appStateListener = CapacitorApp.addListener('appStateChange', (state) => {
+        // When app comes to foreground and we have an opened window, refresh questionnaires
+        // This works even if the window is still open
+        if (state.isActive && openedWindow) {
+          handleGetAssignedQuestionaries();
+        }
+      });
+    }
+
+    // Handle page visibility changes (works for both web and native)
+    // This refreshes data when user switches back to the app tab, even if window is still open
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHiddenRef.current = true;
+      } else if (document.visibilityState === 'visible' && wasHiddenRef.current && openedWindow) {
+        // User returned to the app - refresh data even if window is still open
+        handleGetAssignedQuestionaries();
+        wasHiddenRef.current = false;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (appStateListener) {
+        appStateListener.remove();
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [openedWindow, handleGetAssignedQuestionaries]);
+
   const handleUpgrade = () => {
     toast({
       title: "Upgrade to HolistiCare Plus",
@@ -461,6 +509,8 @@ export default function YouMenu() {
   // For showing health-related cards - using hasRequiredData as indicator
   const hasHealthData = hasRequiredData;
   const [loadingHtmlReport, setLoadingHtmlReport] = useState(false);
+  const [htmlReport, setHtmlReport] = useState<string>("");
+  const [showHtmlReport, setShowHtmlReport] = useState(false);
   const handleGetHtmlReport = () => {
     if (!holisticPlanActionPlan.latest_deep_analysis) return;
 
@@ -469,7 +519,7 @@ export default function YouMenu() {
     Application.getHtmlReport()
       .then((res) => {
         try {
-          const blobUrl = res.data;
+          const blobUrl = res.data.pdf;
 
           const link = document.createElement("a");
           link.href = blobUrl;
@@ -477,6 +527,13 @@ export default function YouMenu() {
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+          fetch(res.data.html).then(response => response.blob()).then(res => res.text())
+          .then(html => {
+            const blob = new Blob([html], { type: "text/html" });
+            const blobUrl = URL.createObjectURL(blob);
+            setHtmlReport(blobUrl);
+            setShowHtmlReport(true);
+          });
         } catch (error: any) {
           console.error("Error downloading file:", error);
         }
@@ -495,6 +552,23 @@ export default function YouMenu() {
 
   const renderMainView = () => (
     <div className="space-y-4">
+      {showHtmlReport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
+          <div className="bg-white dark:bg-neutral-900 w-[100%] h-[100%] overflow-hidden relative">
+           <div className="w-full fixed top-0 bg-white h-10 flex justify-end items-center px-4 z-10">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowHtmlReport(false)}
+              className="h-8 w-8"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+           </div>
+           <iframe src={htmlReport} style={{ width: "100%", height: "calc(100vh - 40px)",marginTop: "40px" }} />
+          </div>
+        </div>
+      )}      
       {/* Age Cards - Prominent Display */}
       <div
         className={`grid gap-3 ${
@@ -921,6 +995,7 @@ export default function YouMenu() {
           </CardContent>
         </Card>
       )}
+
     </div>
   );
 

@@ -27,7 +27,7 @@
 
 "@aparajita/capacitor-secure-storage@^7.1.6":
   version "7.1.6"
-  resolved "https://registry.npmjs.org/@aparajita/capacitor-secure-storage/-/capacitor-secure-storage-7.1.6.tgz"
+  resolved "https://registry.yarnpkg.com/@aparajita/capacitor-secure-storage/-/capacitor-secure-storage-7.1.6.tgz#43e669e33dc6d680797d32ac85d2d116cc2b7397"
   integrity sha512-KIfLOm/oSciUiWsOMtMv2nzlnwW3LERid0DvZ3djt7UORBQvFqpvSefiLG5kkc8D34pGkb2ZqAz0ZprrI9LiTQ==
   dependencies:
     "@capacitor/android" "^7.4.4"

@@ -113,10 +113,12 @@ export default function ChatPage() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showReferencesModal, setShowReferencesModal] = useState(false);
-  const [selectedReferences, setSelectedReferences] = useState<Array<{
-    text: string;
-    filename: string;
-  }>>([]);
+  const [selectedReferences, setSelectedReferences] = useState<
+    Array<{
+      text: string;
+      filename: string;
+    }>
+  >([]);
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
       // Use setTimeout to ensure DOM is updated
@@ -147,7 +149,7 @@ export default function ChatPage() {
           }
         });
         setDisplayedMessages(initDisplayedMessages);
-        
+
         // Update previousCount to match loaded messages
         if (res.data.messages.length > 0) {
           setPreviousCount(res.data.messages.length);
@@ -329,7 +331,7 @@ export default function ChatPage() {
       });
       return;
     }
-    let lastUsedId = 1
+    let lastUsedId = 1;
     if (userMessages.length > 2) {
       lastUsedId = userMessages[userMessages.length - 2].conversation_id;
     }
@@ -395,7 +397,9 @@ export default function ChatPage() {
     localStorage.setItem("chat-disclaimer-seen", "true");
   };
 
-  const handleShowReferences = (references: Array<{text: string; filename: string}>) => {
+  const handleShowReferences = (
+    references: Array<{ text: string; filename: string }>
+  ) => {
     setSelectedReferences(references);
     setShowReferencesModal(true);
   };
@@ -519,8 +523,13 @@ export default function ChatPage() {
     <div className="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20 relative">
       {/* Disclaimer Toast */}
       {showDisclaimer && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-b border-amber-200 dark:border-amber-800 shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 py-3">
+        <div
+          className="fixed max-w-md mx-auto left-0 right-0 z-50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-b border-amber-200 dark:border-amber-800 shadow-lg"
+          style={{
+            top: "env(safe-area-inset-top)",
+          }}
+        >
+          <div className="px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex-shrink-0">
@@ -557,7 +566,6 @@ export default function ChatPage() {
             activeMode={activeMode}
             setActiveMode={setActiveMode}
           />
-
         </div>
         <div className="flex flex-col gap-6">
           {/* Chat Messages */}
@@ -567,10 +575,7 @@ export default function ChatPage() {
             } !bg-transparent !border-none !shadow-none`}
           >
             <CardContent className="flex-1 p-0">
-              <div
-                className=" space-y-4"
-                style={{ scrollbarWidth: "thin" }}
-              >
+              <div className=" space-y-4" style={{ scrollbarWidth: "thin" }}>
                 {messages.map((msg) => {
                   // Use unique key for reported messages
                   const messageKey = `${msg.conversation_id}-${msg.date}-${msg.time}`;
@@ -630,17 +635,20 @@ export default function ChatPage() {
                             {msg.sender_type === "ai" && !isReported && (
                               <div className="flex items-center gap-1">
                                 {/* References button - only show if references exist */}
-                                {msg.references && msg.references.length > 0 && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-                                    onClick={() => handleShowReferences(msg.references!)}
-                                    title="View References"
-                                  >
-                                    <BookOpen className="h-3 w-3" />
-                                  </Button>
-                                )}
+                                {msg.references &&
+                                  msg.references.length > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                                      onClick={() =>
+                                        handleShowReferences(msg.references!)
+                                      }
+                                      title="View References"
+                                    >
+                                      <BookOpen className="h-3 w-3" />
+                                    </Button>
+                                  )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -755,7 +763,12 @@ export default function ChatPage() {
             </CardContent>
           </Card>
         </div>
-        <div className="px-4 py-2 bg-white fixed bottom-16 md:bottom-[108px] left-0 right-0 z-10 max-w-md mx-auto w-full">
+        <div
+          className="px-4 py-2 bg-white fixed left-0 right-0 z-20 max-w-md mx-auto w-full"
+          style={{
+            bottom: `calc(var(--nav-height) + env(safe-area-inset-bottom))`,
+          }}
+        >
           <div className="flex gap-3">
             <div className="flex-1 relative">
               <Textarea
@@ -870,11 +883,23 @@ export default function ChatPage() {
                     <span className="text-sm font-medium text-gray-600 dark:text-gray-400 flex-shrink-0">
                       Source {index + 1}:
                     </span>
-                    <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 break-words text-justify min-w-0 flex-1" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                    <span
+                      className="text-sm font-semibold text-blue-600 dark:text-blue-400 break-words text-justify min-w-0 flex-1"
+                      style={{
+                        wordBreak: "break-word",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
                       {reference.filename}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed break-words text-justify" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                  <p
+                    className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed break-words text-justify"
+                    style={{
+                      wordBreak: "break-word",
+                      overflowWrap: "anywhere",
+                    }}
+                  >
                     {reference.text}
                   </p>
                 </div>

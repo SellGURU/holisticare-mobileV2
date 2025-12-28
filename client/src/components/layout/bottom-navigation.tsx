@@ -38,7 +38,7 @@ export default function BottomNavigation() {
 
   return (
     <div
-      className="dient-to-r sticky bottom-[env(safe-area-inset-bottom)] from-gray-50/90 via-white/90 to-gray-50/90 dark:from-gray-900/90 dark:via-gray-800/90 dark:to-gray-900/90 backdrop-blur-lg border-t border-gray-200/30 dark:border-gray-700/30 px-2 sm:px-6 py-2 sm:py-3 shadow-lg"
+      className="dient-to-r sticky bottom-[env(safe-area-inset-bottom)] from-gray-50/90 via-white/90 to-gray-50/90 dark:from-gray-900/90 dark:via-gray-800/90 dark:to-gray-900/90 backdrop-blur-lg border-t border-gray-200/30 dark:border-gray-700/30 px-2 sm:px-6 py-2 sm:py-3 shadow-lg z-30"
       style={{
         bottom: `env(safe-area-inset-bottom)`,
       }}
