@@ -184,12 +184,12 @@ const StatusBarChartv3: React.FC<StatusBarChartv3Props> = ({
               }}
             >
               <div
-                className={`absolute w-full px-1 ${isCustom ? 'text-[#888888]' : 'text-[#005f73]'}  flex justify-center left-[-4px] top-[-35px] opacity-90 text-[10px]`}
+                className={`absolute w-full px-1 ${isCustom ? 'text-[#888888] dark:text-gray-400' : 'text-[#005f73] dark:text-cyan-400'}  flex justify-center left-[-4px] top-[-35px] opacity-90 text-[10px]`}
               >
                 <TooltipText tooltipValue={el.label}>{el.label}</TooltipText>
               </div>
               <div
-                className={`absolute w-full px-1 ${isCustom ? 'text-[#B0B0B0]' : 'text-[#005f73]'}  flex justify-center left-[-4px] top-[-20px] opacity-90 text-[10px]`}
+                className={`absolute w-full px-1 ${isCustom ? 'text-[#B0B0B0] dark:text-gray-500' : 'text-[#005f73] dark:text-cyan-400'}  flex justify-center left-[-4px] top-[-20px] opacity-90 text-[10px]`}
               >
                 {el.label != '' && <>(</>}
                 <TooltipText tooltipValue={getRangeString(el)}>
@@ -212,10 +212,10 @@ const StatusBarChartv3: React.FC<StatusBarChartv3Props> = ({
                         left: resolvePercentLeft(el) + '%' || '50%',
                       }}
                     >
-                      <div className="w-1 h-1  rotate-45 bg-[#005f73]"></div>
-                      <div className="w-[2px] h-[9px] ml-[1.3px] bg-[#005f73]"></div>
+                      <div className="w-1 h-1  rotate-45 bg-[#005f73] dark:bg-cyan-400"></div>
+                      <div className="w-[2px] h-[9px] ml-[1.3px] bg-[#005f73] dark:bg-cyan-400"></div>
                       <div
-                        className="text-[10px] w-max flex justify-center ml-[0px] items-center gap-[2px] text-[#005f73]"
+                        className="text-[10px] w-max flex justify-center ml-[0px] items-center gap-[2px] text-[#005f73] dark:text-cyan-400"
                         style={{
                           marginLeft:
                             index == 0

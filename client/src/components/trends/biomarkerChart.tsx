@@ -20,10 +20,10 @@ const BiomarkerChart = ({ biomarker, isCheced }: biomarkerChartProps) => {
       <div className="flex-grow gap-2 relative flex items-center justify-center">
         {!isCheced ? (
           <div className="w-full ">
-            <div className={`w-full bg-white`}>
+            <div className={`w-full bg-white dark:bg-gray-800`}>
               <div className=" w-full h-[85px]">
                 <div className="w-full">
-                  <div className="my-1 flex w-full justify-between items-center text-[10px] text-[#383838]">
+                  <div className="my-1 flex w-full justify-between items-center text-[10px] text-[#383838] dark:text-gray-300">
                     Current Value
                   </div>
                   <div className="mt-10">
@@ -42,10 +42,10 @@ const BiomarkerChart = ({ biomarker, isCheced }: biomarkerChartProps) => {
           </div>
         ) : (
           <div className="w-full ">
-            <div className={`w-full bg-white`}>
+            <div className={`w-full bg-white dark:bg-gray-800`}>
               <div className=" w-full h-[115px]">
                 <div className="w-full">
-                  <div className="my-1 flex w-full justify-between items-center text-[10px] text-[#383838]">
+                  <div className="my-1 flex w-full justify-between items-center text-[10px] text-[#383838] dark:text-gray-300">
                     Historical Data
                   </div>
                   <div className="w-full">

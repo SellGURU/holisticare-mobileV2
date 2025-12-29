@@ -90,17 +90,17 @@ export default function SimpleModeSelect({
         </div>
 
         <div className="flex-1 text-left">
-          <div className="font-medium text-sm whitespace-normal break-words">
+          <div className="font-medium text-sm whitespace-normal break-words text-gray-900 dark:text-gray-100">
             {activeMode === "ai" ? "AI Copilot" : "Coach"}
           </div>
-          <div className="text-xs text-gray-500 whitespace-normal break-words">
+          <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-normal break-words">
             {activeMode === "ai" ? "Instant responses" : "Expert guidance"}
           </div>
         </div>
 
         <div className="flex items-center ml-3">
           <ChevronDown
-            className={`w-4 h-4 transition-transform ${
+            className={`w-4 h-4 transition-transform text-gray-600 dark:text-gray-300 ${
               open ? "rotate-180" : ""
             }`}
           />
@@ -133,8 +133,8 @@ export default function SimpleModeSelect({
                     triggerRef.current?.focus();
                   }
                 }}
-                className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-200 cursor-pointer ${
-                  activeMode === it.value ? "bg-orange-300" : ""
+                className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
+                  activeMode === it.value ? "bg-orange-300 dark:bg-orange-700/50" : ""
                 }`}
               >
                 <div
@@ -151,11 +151,11 @@ export default function SimpleModeSelect({
                   )}
                 </div>
                 <div className="flex-1 text-left">
-                  <div className="font-medium">{it.title}</div>
-                  <div className="text-xs text-gray-500">{it.desc}</div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">{it.title}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{it.desc}</div>
                 </div>
                 {activeMode === it.value && (
-                  <Check className="w-4 h-4 text-black" />
+                  <Check className="w-4 h-4 text-black dark:text-white" />
                 )}
               </div>
             ))}

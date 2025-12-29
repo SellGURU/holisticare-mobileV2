@@ -523,45 +523,65 @@ export default function ChatPage() {
     <div className="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20 relative">
       {/* Disclaimer Toast */}
       {showDisclaimer && (
-        <div
-          className="fixed max-w-md mx-auto left-0 right-0 z-50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-b border-amber-200 dark:border-amber-800 shadow-lg"
-          style={{
-            top: "env(safe-area-inset-top)",
-          }}
-        >
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
-                    <span className="text-amber-600 dark:text-amber-400 text-sm font-bold">
-                      !
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    For wellness purposes only — not medical advice.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-end mt-2 w-full">
-              <Button
-                onClick={handleDismissDisclaimer}
-                size="sm"
-                className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-4 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all duration-200"
-              >
-                OK, I Understand
-              </Button>
+  <div className="fixed top-0 left-0 right-0 z-50 
+    bg-gradient-to-r 
+    from-amber-50 to-orange-50
+    dark:from-slate-900 dark:to-slate-800
+    border-b 
+    border-amber-200 
+    dark:border-slate-700
+    shadow-lg"
+  style={{
+    top: "env(safe-area-inset-top)",
+  }}    
+  >
+    <div className="max-w-7xl mx-auto px-4 py-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          {/* Icon */}
+          <div className="flex-shrink-0">
+            <div className="
+              w-8 h-8 rounded-full flex items-center justify-center
+              bg-amber-100 text-amber-700
+              dark:bg-slate-700 dark:text-amber-300
+            ">
+              <span className="text-sm font-bold">!</span>
             </div>
           </div>
+
+          {/* Text */}
+          <p className="
+            text-sm font-medium
+            text-amber-800
+            dark:text-slate-200
+          ">
+            For wellness purposes only — not medical advice.
+          </p>
         </div>
-      )}
+
+        {/* Button */}
+        <Button
+          onClick={handleDismissDisclaimer}
+          size="sm"
+          className="
+            text-xs px-4 py-1.5 rounded-full
+            bg-amber-600 hover:bg-amber-700 text-white
+            dark:bg-slate-700 dark:hover:bg-slate-600
+            dark:text-slate-100
+            shadow-sm hover:shadow-md
+            transition-all duration-200
+          "
+        >
+          OK, I Understand
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
 
       <div className="max-w-7xl mx-auto px-4 py-2 pb-4">
         {/* Mode Toggle */}
-        <div className="sticky top-2 z-10 bg-white rounded-xl">
+        <div className="sticky top-2 z-10 bg-white dark:bg-gray-800 rounded-xl">
           <SimpleModeSelect
             activeMode={activeMode}
             setActiveMode={setActiveMode}
@@ -763,12 +783,9 @@ export default function ChatPage() {
             </CardContent>
           </Card>
         </div>
-        <div
-          className="px-4 py-2 bg-white fixed left-0 right-0 z-20 max-w-md mx-auto w-full"
-          style={{
+        <div style={{
             bottom: `calc(var(--nav-height) + env(safe-area-inset-bottom))`,
-          }}
-        >
+          }} className="px-4 py-2 bg-white dark:bg-gray-800 fixed bottom-16 md:bottom-[108px] left-0 right-0 z-10 max-w-md mx-auto w-full">
           <div className="flex gap-3">
             <div className="flex-1 relative">
               <Textarea
@@ -779,7 +796,7 @@ export default function ChatPage() {
                     ? "Ask your health coach anything..."
                     : "Ask your AI copilot anything..."
                 }
-                className="!min-h-[40px] !h-[40px] placeholder:font-light resize-none placeholder:text-[10px] sm:placeholder:text-xs md:placeholder:text-sm bg-white/80 dark:bg-gray-700/80 border-gray-200/50 dark:border-gray-600/50 backdrop-blur-sm shadow-inner focus:ring-2 focus:ring-blue-500/30 dark:focus:ring-blue-400/30"
+                className="!min-h-[40px] !h-[40px] placeholder:font-light resize-none placeholder:text-[10px] sm:placeholder:text-xs md:placeholder:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 border-gray-200/50 dark:border-gray-600/50 backdrop-blur-sm shadow-inner focus:ring-2 focus:ring-blue-500/30 dark:focus:ring-blue-400/30"
                 onKeyPress={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();

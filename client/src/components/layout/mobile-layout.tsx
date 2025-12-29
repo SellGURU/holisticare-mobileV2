@@ -27,7 +27,6 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
   const { toast } = useToast();
   const [location] = useLocation();
   const [showSearch, setShowSearch] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { token, notifications } = usePushNotifications();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -63,22 +62,14 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "auto" });
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [location]);
-
+  // useEffect(() => {
+  //   document.documentElement.classList.add("dark");
+  //   setIsDarkMode(true);
+  // }, []);
   // Pages that should use the ProfileHeader instead of the default global header
   const useProfileHeader = true; // Use ProfileHeader for all pages for consistency
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    if (isDarkMode) {
-      document.documentElement.classList.remove("dark");
-    } else {
-      document.documentElement.classList.add("dark");
-    }
-    toast({
-      title: isDarkMode ? "Light mode enabled" : "Dark mode enabled",
-      description: "Theme preference saved",
-    });
-  };
+
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -122,13 +113,7 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
               >
                 <Bell className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={toggleDarkMode}>
-                {isDarkMode ? (
-                  <Sun className="w-4 h-4" />
-                ) : (
-                  <Moon className="w-4 h-4" />
-                )}
-              </Button>
+              
             </div>
           </div>
         </header>

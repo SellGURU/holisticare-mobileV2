@@ -1,4 +1,4 @@
-// import { useState } from 'react';
+import { useState, useEffect } from 'react';
 // import { sortKeysWithValues } from './Boxs/Help';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -15,6 +15,20 @@ const HistoricalChart = ({
   dataStatus,
   labels,
 }: HistoricalChartProps) => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const checkDarkMode = () => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    checkDarkMode();
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    return () => observer.disconnect();
+  }, []);
   const resolveColor = (key: string, color?: string) => {
     if (color && color != '') {
       return color;
@@ -154,7 +168,7 @@ const HistoricalChart = ({
               markerWidth="5"
               markerHeight="5"
             >
-              <circle cx="5" cy="5" r="2" fill="#888888" />
+              <circle cx="5" cy="5" r="2" fill={isDarkMode ? "#9CA3AF" : "#888888"} />
             </marker>
           </defs>
           {dataPoints.map((_point, index) => {
@@ -177,7 +191,7 @@ const HistoricalChart = ({
                 y1={y1}
                 x2={x2}
                 y2={y2}
-                stroke="#888888"
+                stroke={isDarkMode ? "#9CA3AF" : "#888888"}
                 strokeWidth="1"
                 strokeDasharray="2,2"
               />
@@ -227,9 +241,9 @@ const HistoricalChart = ({
                               ? 'visible'
                               : 'hidden',
                         }}
-                        className="w-2 h-2 border border-gray-50 rounded-full relative"
+                        className="w-2 h-2 border border-gray-50 dark:border-gray-700 rounded-full relative"
                       >
-                        <div className="absolute -top-4 left-1/2 max-w-[40px] text-ellipsis overflow-hidden transform text-[8px] text-Text-Primary -translate-x-1/2 py-1 rounded whitespace-nowrap z-10">
+                        <div className="absolute -top-4 left-1/2 max-w-[40px] text-ellipsis overflow-hidden transform text-[8px] text-Text-Primary dark:text-gray-300 -translate-x-1/2 py-1 rounded whitespace-nowrap z-10">
                           {point}
                         </div>
                       </div>
@@ -239,11 +253,11 @@ const HistoricalChart = ({
               </div>
 
               {el.high ? (
-                <div className="absolute right-[8px]  text-nowrap overflow-hidden text-[8px] bottom-[4px] opacity-35 text-center">
+                <div className="absolute right-[8px]  text-nowrap overflow-hidden text-[8px] bottom-[4px] opacity-35 dark:opacity-50 text-center text-gray-700 dark:text-gray-300">
                   {el.high}
                 </div>
               ) : (
-                <div className="absolute right-[8px]  text-nowrap overflow-hidden text-[8px] bottom-[4px] opacity-35 text-center">
+                <div className="absolute right-[8px]  text-nowrap overflow-hidden text-[8px] bottom-[4px] opacity-35 dark:opacity-50 text-center text-gray-700 dark:text-gray-300">
                   {el.low + '<'}
                 </div>
               )}
@@ -260,11 +274,11 @@ const HistoricalChart = ({
           <div className="flex justify-start items-center w-full ml-2 mt-1">
             {labels.map((label, index) => (
               <div key={index} className="text-[8px] w-[40px]">
-                <div className="flex justify-start text-[#888888] font-medium  items-center">
+                <div className="flex justify-start text-[#888888] dark:text-gray-400 font-medium  items-center">
                   <div>{label.split('-')[2]}.</div>
                   <div>{label.split('-')[1]}.</div>
                 </div>
-                <div className="text-[#B0B0B0] mt-[-2px] ml-[2px]">
+                <div className="text-[#B0B0B0] dark:text-gray-500 mt-[-2px] ml-[2px]">
                   {label.split('-')[0]}
                 </div>
               </div>

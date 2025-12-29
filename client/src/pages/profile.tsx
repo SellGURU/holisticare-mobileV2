@@ -490,7 +490,20 @@ export default function Profile() {
       });
     }
   };
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+    if (isDarkMode) {
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark");
+    }
+    toast({
+      title: isDarkMode ? "Light mode enabled" : "Dark mode enabled",
+      description: "Theme preference saved",
+    });
+  };
   const settingsItems = [
     // {
     //   icon: User,
@@ -548,6 +561,20 @@ export default function Profile() {
       description: "Permanently delete your account and data",
       action: () => setShowDeleteAccountDialog(true),
       badge: null,
+    },
+    {
+      icon: Settings,
+      title: "Appearance",
+      description: "Toggle dark mode",
+      action: toggleDarkMode,
+      badge: null,
+      rightElement: (
+        <Switch
+          checked={isDarkMode}
+          onCheckedChange={toggleDarkMode}
+          onClick={(e) => e.stopPropagation()} // prevents triggering row action twice
+        />
+      ),
     },
   ];
 
