@@ -527,13 +527,7 @@ export default function YouMenu() {
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          fetch(res.data.html).then(response => response.blob()).then(res => res.text())
-          .then(html => {
-            const blob = new Blob([html], { type: "text/html" });
-            const blobUrl = URL.createObjectURL(blob);
-            setHtmlReport(blobUrl);
-            setShowHtmlReport(true);
-          });
+
         } catch (error: any) {
           console.error("Error downloading file:", error);
         }
@@ -546,6 +540,39 @@ export default function YouMenu() {
         });
       })
       .finally(() => {
+        setLoadingHtmlReport(false);
+      });
+  };
+  const [loadingViewHtmlReport, setLoadingViewHtmlReport] = useState(false);
+  const handleViewHtmlReport = () => {
+    if (!holisticPlanActionPlan.latest_deep_analysis) return;
+
+    setLoadingViewHtmlReport(true);
+
+    Application.getHtmlReport()
+      .then((res) => {
+        try {
+          fetch(res.data.html).then(response => response.blob()).then(res => res.text())
+          .then(html => {
+            const blob = new Blob([html], { type: "text/html" });
+            const blobUrl = URL.createObjectURL(blob);
+            setHtmlReport(blobUrl);
+            setShowHtmlReport(true);
+          });          
+
+        } catch (error: any) {
+          console.error("Error downloading file:", error);
+        }
+      })
+      .catch((err) => {
+        toast({
+          title: "Error",
+          description: err?.response?.data?.detail,
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        setLoadingViewHtmlReport(false);
         setLoadingHtmlReport(false);
       });
   };
@@ -987,6 +1014,18 @@ export default function YouMenu() {
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       "Download PDF Report"
+                    )}
+                  </Button>
+
+                  <Button
+                    id="view-pdf-report-Box"
+                    className="w-full bg-gradient-to-r mt-3 from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 text-sm min-h-[44px]"
+                    onClick={handleViewHtmlReport}
+                  >
+                    {loadingViewHtmlReport ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "View PDF Report"
                     )}
                   </Button>
                 </>
