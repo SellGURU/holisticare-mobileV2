@@ -917,9 +917,16 @@ export default function YouMenu() {
           <button
             onClick={() => setLocation("/wearable")}
             className="w-full flex items-center justify-center gap-2
-                      bg-emerald-500 hover:bg-emerald-600
-                      text-white text-sm font-medium
+                    text-sm font-medium
                       py-3 rounded-xl transition-colors"
+          style={{
+            background: `${
+              brandInfo ? brandInfo?.primary_color : undefined
+            }`,
+            color: `${
+              brandInfo ? isColorDark(brandInfo?.primary_color||'#000000') ? "white" : "black" : undefined
+            }`,
+          }}
           >
             Go to Dashboard
             <ArrowRight className="w-4 h-4" />
