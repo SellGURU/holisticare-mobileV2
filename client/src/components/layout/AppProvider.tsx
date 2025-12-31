@@ -13,10 +13,21 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     tone: string;
     focus_area: string;
   }>();
+  const [wellnessScore, setWellnessScore] = useState({
+    scores:[],
+    latest_date:null as string | null,
+  })
   useEffect(() => {
     Application.getBrandInfo()
       .then((res: any) => {
         setBrandInfo(res.data.brand_elements);
+      });
+    Application.getWellnessScores()
+      .then((res: any) => {
+        setWellnessScore({
+          scores: res.data.scores,
+          latest_date: res.data.latest_date,
+        });
       });
   }, []);
   return (
@@ -30,7 +41,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
             secondary_color: '',
             tone: '',
             focus_area: '',
-        }
+        },
+        wellnessScore: wellnessScore
     }}>
       {children}
     </AppContext.Provider>
