@@ -32,6 +32,7 @@ import {
   UpdateAvailableModal,
   UnsupportedVersionModal,
 } from "@/components/version";
+import AppProvider from "./components/layout/AppProvider";
 
 function Router() {
   const { isAuthenticated, fetchClientInformation, needsPasswordChange } = useAuth();
@@ -130,27 +131,29 @@ function Router() {
               <Route component={AuthPage} />
             </Switch>
           ) : (
-            <MobileLayout>
-              <Switch>
-                <Route path="/onboarding" component={Onboarding} />
-                <Route path="/" component={YouMenu} />
-                <Route path="/dashboard" component={Dashboard} />
-                <Route path="/monitor" component={Trends} />
-                <Route path="/chat" component={ChatPage} />
-                <Route path="/educational" component={EducationalPage} />
-                <Route path="/profile" component={Profile} />
-                <Route path="/devices" component={Devices} />
-                <Route path="/plan" component={PlanPage} />
-                <Route path="/action-plan" component={ActionPlanPage} />
-                <Route path="/lab-upload" component={LabUpload} />
-                <Route path="/manual-entry" component={ManualEntry} />
-                <Route path="/holistic-plans" component={HolisticPlans} />
-                <Route path="/not-found" component={NotFound} />
-                <Route path="/auth" component={YouMenu} />
-                <Route path="/wearable" component={WearableDashboard} />
-                <Route component={NotFound} />
-              </Switch>
-            </MobileLayout>
+            <AppProvider>
+              <MobileLayout>
+                <Switch>
+                  <Route path="/onboarding" component={Onboarding} />
+                  <Route path="/" component={YouMenu} />
+                  <Route path="/dashboard" component={Dashboard} />
+                  <Route path="/monitor" component={Trends} />
+                  <Route path="/chat" component={ChatPage} />
+                  <Route path="/educational" component={EducationalPage} />
+                  <Route path="/profile" component={Profile} />
+                  <Route path="/devices" component={Devices} />
+                  <Route path="/plan" component={PlanPage} />
+                  <Route path="/action-plan" component={ActionPlanPage} />
+                  <Route path="/lab-upload" component={LabUpload} />
+                  <Route path="/manual-entry" component={ManualEntry} />
+                  <Route path="/holistic-plans" component={HolisticPlans} />
+                  <Route path="/not-found" component={NotFound} />
+                  <Route path="/auth" component={YouMenu} />
+                  <Route path="/wearable" component={WearableDashboard} />
+                  <Route component={NotFound} />
+                </Switch>
+              </MobileLayout>
+            </AppProvider>
           )}
         </>
       )}

@@ -327,6 +327,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
         // // 5. Schedule sync
         try{
           if(Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'){
+            await RookPermissions.requestAndroidBackgroundPermissions();
             await RookHealthConnect.scheduleHealthConnectBackGround();
             await RookHealthConnect.scheduleYesterdaySync({
               doOnEnd: 'oldest' // یا 'latest' یا 'nothing' بر اساس نیازت
@@ -531,7 +532,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
         }
       });
     }
-  }, [devicesData?.data_sources, isConnecting]);
+  }, [devicesData?.data_sources, isConnecting, isConnectingSamsungHealth]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/30 to-teal-50/40 dark:from-gray-900 dark:via-emerald-900/20 dark:to-teal-900/10">
@@ -623,8 +624,8 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
                           }
                           className={`text-xs h-7 ${
                             isConnecting === 'connected'
-                              ? "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                              : "bg-blue-600 hover:bg-blue-700 text-white"
+                              ? "border-red-200 text-red-600 md:hover:bg-red-50  dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                              : "bg-blue-600 md:hover:bg-blue-700 text-white"
                           }`}
                           onClick={() => {
                             if (isConnecting === 'connected') {
@@ -773,8 +774,8 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
                           }
                           className={`text-xs h-7 ${
                             source.connected
-                              ? "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                              : "bg-blue-600 hover:bg-blue-700 text-white"
+                              ? "border-red-200 text-red-600 md:hover:bg-red-50  dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                              : "bg-blue-600 md:hover:bg-blue-700 text-white"
                           }`}
                           onClick={() => {
                             if (source.connected) {

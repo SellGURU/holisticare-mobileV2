@@ -242,21 +242,36 @@ export default function AuthPage() {
           navigate("/");
         }}
       >
-        <DialogContent className="w-[95vw] max-w-md">
+        <DialogContent className="max-w-sm bg-gradient-to-br from-white/95 via-white/90 to-green-50/60 dark:from-gray-800/95 dark:via-gray-800/90 dark:to-green-900/20 backdrop-blur-xl border-0 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              🔐 Biometric Login
+            <DialogTitle className="text-lg font-medium bg-gradient-to-r from-gray-900 to-green-800 dark:from-white dark:to-green-200 bg-clip-text text-transparent flex items-center gap-2">
+              {biometryType === BiometryType.faceId ||
+              biometryType === BiometryType.faceAuthentication ? (
+                <ScanFace className="w-5 h-5 text-green-600" />
+              ) : (
+                <Fingerprint className="w-5 h-5 text-green-600" />
+              )}
+              Biometric Login
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm text-gray-600 dark:text-gray-400">
               Do you allow us to use biometric authentication for future logins?
             </DialogDescription>
           </DialogHeader>
 
-          <DialogFooter className="flex gap-2 justify-end flex-nowrap">
-            <Button variant="outline" onClick={handleDisableBiometric}>
+          <DialogFooter className="flex gap-2 w-full justify-end flex-nowrap mt-4 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={handleDisableBiometric}
+              className="flex-shrink-0 min-w-fit"
+            >
               Not now
             </Button>
-            <Button onClick={handleEnableBiometric}>Enable</Button>
+            <Button
+              onClick={handleEnableBiometric}
+              className="flex-shrink-0 min-w-fit bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg"
+            >
+              Enable
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

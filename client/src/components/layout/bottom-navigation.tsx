@@ -13,8 +13,8 @@ import { useState } from "react";
 
 const navItems = [
   { path: "/", icon: Home, label: "Home" },
-  { path: "/wearable", icon: Watch, label: "Wellness" },
-  { path: "/monitor", icon: Activity, label: "Nutrition" },
+  // { path: "/wearable", icon: Watch, label: "Wellness" },
+  { path: "/monitor", icon: Activity, label: "Result" },
   { path: "/chat", icon: MessageCircle, label: "Chat", isSpecial: true },
   { path: "/plan", icon: Target, label: "Plan" },
   { path: "/educational", icon: BookOpen, label: "Educational" },
