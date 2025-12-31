@@ -491,7 +491,16 @@ export default function Profile() {
     }
   };
   const [isDarkMode, setIsDarkMode] = useState(false);
-
+  useEffect(() => {
+    // 1) read current app class
+    const root = document.documentElement;
+    const hasDarkClass = root.classList.contains("dark");
+  
+    setIsDarkMode(hasDarkClass);
+  
+    // 2) optional: only apply if you want this component to own the class
+    // applyTheme(hasDarkClass);
+  }, []);
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
     if (isDarkMode) {
