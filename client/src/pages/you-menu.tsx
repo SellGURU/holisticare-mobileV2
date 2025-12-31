@@ -820,46 +820,41 @@ export default function YouMenu() {
         </Card>
       )}
 
-      <Card
-        className="cursor-pointer relative overflow-hidden
-                  w-full  h-auto
-                  mx-auto rounded-xl
-                  transition-all duration-500
-                  hover:shadow-[0_25px_60px_-15px_rgba(16,185,129,0.6)]
-                  bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50
-                  shadow-2xl p-2"
-      >
-        {/* Decorative shapes */}
-        <div className="absolute -top-5 -left-5 w-24 h-24 rounded-full bg-white/10 blur-3xl animate-pulse-slow"></div>
-        <div className="absolute -bottom-6 -right-6 w-32 h-32 rounded-full bg-white/5 blur-2xl"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1),transparent_70%)]"></div>
+<Card
+  className="cursor-pointer hover:shadow-2xl transition-all duration-500 
+             bg-gradient-to-br from-emerald-50/50 via-white/50 to-lime-50/50 
+             dark:from-emerald-900/20 dark:via-gray-800/50 dark:to-lime-900/20 
+             border-0 shadow-xl backdrop-blur-lg"
+  onClick={() => setLocation("/wearable")}
+>
+  <CardContent className="p-4 relative">
+    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-lime-500/5 rounded-lg"></div>
 
-        <CardContent className="relative flex flex-col items-center text-center text-white pt-6">
-          {/* Icon */}
-          {/* <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-lg shadow-lg flex items-center justify-center mb-4">
-            <Activity className="w-5 h-5 text-white" />
-          </div> */}
+    <div className="relative flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-lime-500 
+                        rounded-full flex items-center justify-center shadow-lg">
+          <HeartPulse className="w-5 h-5 text-white" />
+        </div>
 
-          {/* Title */}
-          <h3 className="text-lg text-gray-700 dark:text-gray-100 font-medium mb-1">
+        <div>
+          <h3 className="font-thin text-base text-gray-900 dark:text-gray-100 mb-1">
             Wellness Dashboard
           </h3>
-
-          {/* Subtitle */}
-          <p className="text-sm text-gray-500 dark:text-gray-100 max-w-[280px] mb-6">
-            See your daily wellness sleep, movement, stress, heart rhythms, and body metrics
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-light">
+            sleep, stress &  body metrics
           </p>
+        </div>
+      </div>
 
-          {/* CTA Button */}
-          <button
-            onClick={() => setLocation("/wearable")}
-            className="flex items-center gap-2 bg-emerald-400 backdrop-blur-lg px-5 py-2 rounded-full hover:bg-emerald-500 transition-colors"
-          >
-            <span className="text-sm font-medium text-white">Go to Dashboard</span>
-            <ArrowRight className="w-4 h-4 text-white" />
-          </button>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+        <span className="text-xs font-light">View </span>
+        <ArrowRight className="w-4 h-4" />
+      </div>
+    </div>
+  </CardContent>
+</Card>
+
 
       {/* Assigned Questionnaires Section */}
       <Card className="bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900/50 dark:via-gray-800/50 dark:to-gray-900/50 border-0 shadow-xl backdrop-blur-lg">
