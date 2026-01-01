@@ -543,7 +543,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setLocation("/profile")}
+              onClick={() => window.history.back()}
               className="p-2"
             >
               <ArrowLeft className="w-5 h-5" />
