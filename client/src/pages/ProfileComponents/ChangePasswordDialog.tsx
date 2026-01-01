@@ -398,7 +398,7 @@ const ChangePasswordDialog = ({
                 });
             }}
             disabled={changePasswordMutation.isPending}
-            className="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-blue-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {changePasswordMutation.isPending
               ? "Changing..."

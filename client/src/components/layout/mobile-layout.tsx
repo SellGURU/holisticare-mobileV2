@@ -81,7 +81,12 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
     setShowSearch(false);
     setSearchQuery("");
   };
+  
 
+  const isChatPage =
+    location === "/chat" || location.startsWith("/chat/") || location.includes("/chat");
+
+  const bottomPaddingClass = isChatPage ? "pb-10" : "pb-20";
   return (
     <div className="h-dvh overflow-y-hidden flex flex-col bg-gray-50 w-full relative dark:bg-gray-900">
       {useProfileHeader ? (
@@ -119,7 +124,8 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
         </header>
       )}
 
-      <div id="main-scroll-container" ref={scrollContainerRef} className=" flex-1 overflow-y-auto overscroll-contain pb-20 " >
+      <div id="main-scroll-container" ref={scrollContainerRef}         className={`flex-1 overflow-y-auto overscroll-contain ${bottomPaddingClass}`}
+ >
         {useProfileHeader ? (
           children
         ) : (

@@ -520,7 +520,7 @@ export default function ChatPage() {
     });
   }, [messages]);
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20 relative">
+    <div className="  bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20 relative">
       {/* Disclaimer Toast */}
       {showDisclaimer && (
   <div className="fixed top-0 left-0 right-0 z-50 
@@ -537,7 +537,7 @@ export default function ChatPage() {
   >
     <div className="max-w-7xl mx-auto px-4 py-3">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           {/* Icon */}
           <div className="flex-shrink-0">
             <div className="
@@ -579,7 +579,7 @@ export default function ChatPage() {
   </div>
 )}
 
-      <div className="max-w-7xl mx-auto px-4 py-2 pb-4">
+      <div className="max-w-7xl mx-auto px-4 py-2 pb-4 ">
         {/* Mode Toggle */}
         <div className="sticky top-2 z-10 bg-white dark:bg-gray-800 rounded-xl">
           <SimpleModeSelect
