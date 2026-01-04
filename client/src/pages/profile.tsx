@@ -1,8 +1,6 @@
 import Application from "@/api/app";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -24,43 +22,28 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { subscribe } from "@/lib/event";
+import { secureStorage } from "@/services/secureStorage";
 import { useMutation } from "@tanstack/react-query";
 import {
   Activity,
-  Award,
   Bell,
   Brain,
   ChevronRight,
-  Crown,
-  Download,
-  Eye,
-  EyeOff,
-  Globe,
-  Heart,
   HelpCircle,
   Lock,
   Mail,
-  Settings,
   Shield,
-  Smartphone,
-  Target,
+  Trash2,
   User,
   Watch,
-  Bluetooth,
-  Wifi,
-  Plus,
-  Trash2,
-  ClipboardList,
-  Zap,
-  AlertTriangle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import ProfileInfo from "./ProfileComponents/ProfileInfo";
 import AccountSetting from "./ProfileComponents/AccountSetting";
 import ChangePasswordDialog from "./ProfileComponents/ChangePasswordDialog";
-import { apiRequest } from "@/lib/queryClient";
-import { secureStorage } from "@/services/secureStorage";
+import DeleteAcountDialog from "./ProfileComponents/DeleteAcountDialog";
+import NotificationDialog from "./ProfileComponents/NotificationDialog";
+import ProfileInfo from "./ProfileComponents/ProfileInfo";
 
 export default function Profile() {
   const { user, logout, fetchClientInformation } = useAuth();
@@ -183,16 +166,13 @@ export default function Profile() {
 
   // Notification preferences
   const [notificationSettings, setNotificationSettings] = useState({
-    emailNotifications: true,
-    pushNotifications: true,
-    labResults: true,
-    goalReminders: true,
-    weeklyReports: true,
-    chatMessages: true,
+    emailNotifications: false,
+    pushNotifications: false,
+    chatMessages: false,
     questionnaire_assigned: false,
-    systemUpdates: false,
-    marketingEmails: false,
   });
+  const [isLoadingNotificationSettings, setIsLoadingNotificationSettings] =
+    useState(false);
 
   // Load notification settings when dialog opens
   const loadNotificationSettings = async () => {
@@ -207,12 +187,6 @@ export default function Profile() {
         pushNotifications: Boolean(channels.push),
         chatMessages: Boolean(content.chat_messages),
         questionnaire_assigned: Boolean(content.questionnaire_assigned),
-        // Map available content types to existing toggles if present
-        // labResults: Boolean(content.lab_results ?? prev.labResults),
-        // goalReminders: Boolean(content.goal_reminders ?? prev.goalReminders),
-        // weeklyReports: Boolean(content.weekly_reports ?? prev.weeklyReports),
-        // systemUpdates: Boolean(content.system_updates ?? prev.systemUpdates),
-        // marketingEmails: Boolean(content.marketing_emails ?? prev.marketingEmails),
       }));
     } catch (error: any) {
       toast({
@@ -350,7 +324,7 @@ export default function Profile() {
         handleGetClientInformation();
         // Also refresh auth service client information
         fetchClientInformation();
-        
+
         setLocation("/");
       } else {
         toast({
@@ -417,45 +391,41 @@ export default function Profile() {
   };
 
   const saveNotificationSettings = async () => {
-    try {
-      const payload = {
-        channels: {
-          email: !!notificationSettings.emailNotifications,
-          push: !!notificationSettings.pushNotifications,
-        },
-        content_types: {
-          chat_messages: !!notificationSettings.chatMessages,
-          questionnaire_assigned: !!notificationSettings.questionnaire_assigned,
-          // lab_results: !!notificationSettings.labResults,
-          // goal_reminders: !!notificationSettings.goalReminders,
-          // weekly_reports: !!notificationSettings.weeklyReports,
-          // system_updates: !!notificationSettings.systemUpdates,
-          // marketing_emails: !!notificationSettings.marketingEmails,
-        },
-      };
-      const res = await Application.saveNotifications(payload);
-      if (res?.status === 200) {
-        toast({
-          title: "Notifications updated",
-          description: "Your notification preferences have been saved.",
-        });
-        setShowNotificationsDialog(false);
-      } else {
+    setIsLoadingNotificationSettings(true);
+    const payload = {
+      channels: {
+        email: !!notificationSettings.emailNotifications,
+        push: !!notificationSettings.pushNotifications,
+      },
+      content_types: {
+        chat_messages: !!notificationSettings.chatMessages,
+        questionnaire_assigned: !!notificationSettings.questionnaire_assigned,
+      },
+    };
+    await Application.saveNotifications(payload)
+      .then((res) => {
+        if (res?.status === 200) {
+          toast({
+            title: "Notifications updated",
+            description: "Your notification preferences have been saved.",
+          });
+        }
+      })
+      .catch((error) => {
         toast({
           title: "Failed to save notifications",
-          description: res?.data?.detail || "Unexpected server response.",
+          description:
+            error?.response?.data?.detail ||
+            (error instanceof Error
+              ? error.message
+              : "Unexpected server response."),
           variant: "destructive",
         });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Failed to save notifications",
-        description:
-          error?.response?.data?.detail ||
-          (error instanceof Error ? error.message : "Please try again."),
-        variant: "destructive",
+      })
+      .finally(() => {
+        setShowNotificationsDialog(false);
+        setIsLoadingNotificationSettings(false);
       });
-    }
   };
 
   const savePrivacySettings = async () => {
@@ -529,13 +499,13 @@ export default function Profile() {
       badge:
         connectedDevices.length > 0 ? connectedDevices.length.toString() : null,
     },
-    // {
-    //   icon: Bell,
-    //   title: "Notifications",
-    //   description: "Manage your notification preferences",
-    //   action: () => setShowNotificationsDialog(true),
-    //   badge: null,
-    // },
+    {
+      icon: Bell,
+      title: "Notifications",
+      description: "Manage your notification preferences",
+      action: () => setShowNotificationsDialog(true),
+      badge: null,
+    },
     // {
     //   icon: Shield,
     //   title: "Privacy & Data",
@@ -796,264 +766,14 @@ export default function Profile() {
         />
 
         {/* Notifications Dialog */}
-        <Dialog
+        <NotificationDialog
           open={showNotificationsDialog}
           onOpenChange={setShowNotificationsDialog}
-        >
-          <DialogContent className="max-w-sm bg-gradient-to-br from-white/95 via-white/90 to-blue-50/60 dark:from-gray-800/95 dark:via-gray-800/90 dark:to-blue-900/20 backdrop-blur-xl border-0 shadow-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-medium bg-gradient-to-r from-gray-900 to-blue-800 dark:from-white dark:to-blue-200 bg-clip-text text-transparent flex items-center gap-2">
-                <Bell className="w-4 h-4 text-blue-600" />
-                Notification Preferences
-              </DialogTitle>
-              <DialogDescription className="text-sm text-gray-600 dark:text-gray-400">
-                Manage how you receive notifications from HolistiCare
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 max-h-[50vh] overflow-y-auto">
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Communication Methods
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-gradient-to-r from-blue-50/50 to-white/50 dark:from-blue-900/20 dark:to-gray-800/30">
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-blue-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Email Notifications
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Receive updates via email
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.emailNotifications}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          emailNotifications: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-gradient-to-r from-blue-50/50 to-white/50 dark:from-blue-900/20 dark:to-gray-800/30">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-blue-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Push Notifications
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Get instant alerts on your device
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.pushNotifications}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          pushNotifications: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                  Content Preferences
-                </h3>
-                <div className="space-y-3">
-                  {/* <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-50/50 to-white/50 dark:from-emerald-900/20 dark:to-gray-800/30">
-                    <div className="flex items-center gap-3">
-                      <Activity className="w-4 h-4 text-emerald-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Lab Results
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          New test results and analysis
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.labResults}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          labResults: checked,
-                        }))
-                      }
-                    />
-                  </div> */}
-                  {/* <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-50/50 to-white/50 dark:from-emerald-900/20 dark:to-gray-800/30">
-                    <div className="flex items-center gap-3">
-                      <Target className="w-4 h-4 text-emerald-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Goal Reminders
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Daily and weekly goal check-ins
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.goalReminders}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          goalReminders: checked,
-                        }))
-                      }
-                    />
-                  </div> */}
-                  {/* <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-50/50 to-white/50 dark:from-emerald-900/20 dark:to-gray-800/30">
-                    <div className="flex items-center gap-3">
-                      <Heart className="w-4 h-4 text-emerald-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Weekly Reports
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Summary of your health progress
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.weeklyReports}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          weeklyReports: checked,
-                        }))
-                      }
-                    />
-                  </div> */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-purple-50/50 to-white/50 dark:from-purple-900/20 dark:to-gray-800/30">
-                    <div className="flex items-center gap-3">
-                      <Brain className="w-4 h-4 text-purple-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Chat Messages
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          AI assistant and coach messages
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.chatMessages}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          chatMessages: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-50/50 to-white/50 dark:from-emerald-900/20 dark:to-gray-800/30">
-                    <div className="flex items-center gap-3">
-                      <ClipboardList className="w-4 h-4 text-emerald-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Questionnaire Assigned
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          New health assessments to complete
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.questionnaire_assigned}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          questionnaire_assigned: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* <div className="space-y-4">
-                <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                  Other
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-gray-50/50 to-white/50 dark:from-gray-700/50 dark:to-gray-800/30">
-                    <div className="flex items-center gap-3">
-                      <Settings className="w-4 h-4 text-gray-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          System Updates
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          App updates and maintenance
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.systemUpdates}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          systemUpdates: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-gray-50/50 to-white/50 dark:from-gray-700/50 dark:to-gray-800/30">
-                    <div className="flex items-center gap-3">
-                      <Award className="w-4 h-4 text-gray-600" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Marketing Emails
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Product updates and tips
-                        </div>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.marketingEmails}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          marketingEmails: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div> */}
-            </div>
-            <div className="flex flex-col gap-2 pt-3">
-              <Button
-                onClick={saveNotificationSettings}
-                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg"
-              >
-                Save Preferences
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowNotificationsDialog(false)}
-                className="w-full bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm border-gray-200/50 dark:border-gray-600/50"
-              >
-                Cancel
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+          notificationSettings={notificationSettings}
+          setNotificationSettings={setNotificationSettings}
+          isLoadingNotificationSettings={isLoadingNotificationSettings}
+          saveNotificationSettings={saveNotificationSettings}
+        />
 
         {/* Privacy & Data Dialog */}
         <Dialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog}>
@@ -1393,91 +1113,15 @@ export default function Profile() {
           </DialogContent>
         </Dialog>
 
-        <Dialog
+        <DeleteAcountDialog
           open={showDeleteAccountDialog}
-          onOpenChange={(open) => {
-            setShowDeleteAccountDialog(open);
-            if (!open) {
-              setDeleteConfirmation("");
-            }
-          }}
-        >
-          <DialogContent className="max-w-lg bg-gradient-to-br from-white/95 via-white/90 to-red-50/60 dark:from-gray-800/95 dark:via-gray-800/90 dark:to-red-900/20 backdrop-blur-xl border-0 shadow-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-thin bg-gradient-to-r from-gray-900 to-red-800 dark:from-white dark:to-red-200 bg-clip-text text-transparent flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-                Delete Account
-              </DialogTitle>
-              <DialogDescription className="text-gray-600 dark:text-gray-400 font-light">
-                This action cannot be undone. This will permanently delete your
-                account and remove all your data from our servers.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div className="bg-red-50/50 dark:bg-red-900/20 border border-red-200/50 dark:border-red-800/30 rounded-lg p-4">
-                <div className="flex gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-gray-700 dark:text-gray-300">
-                    <p className="font-medium mb-2">
-                      This will permanently delete:
-                    </p>
-                    <ul className="list-disc list-inside space-y-1 text-xs">
-                      <li>Your profile and account information</li>
-                      <li>All your health data and lab results</li>
-                      <li>Your goals, challenges, and action plans</li>
-                      <li>All questionnaire responses and insights</li>
-                      <li>Your chat history and messages</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="delete-confirmation"
-                  className="text-gray-700 dark:text-gray-300 font-medium"
-                >
-                  Type{" "}
-                  <span className="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-sm">
-                    DELETE/{clientInformation?.name}
-                  </span>{" "}
-                  to confirm
-                </Label>
-                <Input
-                  id="delete-confirmation"
-                  value={deleteConfirmation}
-                  onChange={(e) => setDeleteConfirmation(e.target.value)}
-                  placeholder={`DELETE/${clientInformation?.name}`}
-                  className="mt-2 bg-white/80 dark:bg-gray-700/80 border-red-200/50 dark:border-red-800/30 focus:border-red-500 dark:focus:border-red-500"
-                  data-testid="input-delete-confirmation"
-                />
-              </div>
-
-              <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-700/30 p-3 rounded-lg">
-                Once you delete your account, there is no going back. Please be
-                certain.
-              </div>
-
-              <div className="pt-4">
-                <Button
-                  onClick={handleDeleteAccount}
-                  className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-lg"
-                  disabled={
-                    deleteConfirmation !==
-                      `DELETE/${clientInformation?.name}` ||
-                    deleteAccountMutation.isPending
-                  }
-                  data-testid="button-delete-account"
-                >
-                  {deleteAccountMutation.isPending
-                    ? "Deleting Account..."
-                    : "Delete My Account Permanently"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+          onOpenChange={setShowDeleteAccountDialog}
+          deleteConfirmation={deleteConfirmation}
+          setDeleteConfirmation={setDeleteConfirmation}
+          deleteAccountMutation={deleteAccountMutation}
+          clientInformation={clientInformation}
+          handleDeleteAccount={handleDeleteAccount}
+        />
       </div>
     </div>
   );

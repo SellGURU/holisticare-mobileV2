@@ -100,16 +100,16 @@ class Application extends Api {
   static addEvent = (data: any) => {
     return this.post("/mobile/add_event", data);
   };
-  static connectVariable = (device:string) => {
-    return this.post("/mobile/settings/connect_device",{
-      connected_device:device
-    })
-  }  
-  static disConnectVariable = (device:string) => {
-    return this.post("/mobile/settings/disconnect_device",{
-      disconnected_device:device
-    })
-  }  
+  static connectVariable = (device: string) => {
+    return this.post("/mobile/settings/connect_device", {
+      connected_device: device,
+    });
+  };
+  static disConnectVariable = (device: string) => {
+    return this.post("/mobile/settings/disconnect_device", {
+      disconnected_device: device,
+    });
+  };
   static getHolisticPlanActionPlan() {
     const response = this.post("/mobile/holistic_plan_action_plan", {});
     return response;
@@ -128,16 +128,15 @@ class Application extends Api {
     return response;
   }
 
-  static saveNotifications(data: any) {
+  static saveNotifications(data: {
+    channels: { email: boolean; push: boolean };
+    content_types: { chat_messages: boolean; questionnaire_assigned: boolean };
+  }) {
     const response = this.post("/mobile/save_notification_settings", data);
     return response;
   }
   static showNotifications(data: any = {}) {
     const response = this.post("/mobile/show_notification_settings", data);
-    return response;
-  }
-  static saveNotifSettings(data: any) {
-    const response = this.post("/mobile/save_notification_settings", data);
     return response;
   }
   static getBrandInfo() {
@@ -150,23 +149,29 @@ class Application extends Api {
   }
 
   static forgetPasswordSendVerification(email: string) {
-    const response = this.post("/mobile/auth/forget_password/send_verification", {
-      email: email
-    });
+    const response = this.post(
+      "/mobile/auth/forget_password/send_verification",
+      {
+        email: email,
+      }
+    );
     return response;
   }
 
   static forgetPasswordVerifyResetCode(email: string, reset_code: number) {
-    const response = this.post("/mobile/auth/forget_password/verify_reset_code", {
-      email: email,
-      reset_code: reset_code
-    });
+    const response = this.post(
+      "/mobile/auth/forget_password/verify_reset_code",
+      {
+        email: email,
+        reset_code: reset_code,
+      }
+    );
     return response;
   }
   static forgetPasswordResetPassword(email: string, new_password: string) {
     const response = this.post("/mobile/auth/forget_password/reset_password", {
       email: email,
-      password: new_password
+      password: new_password,
     });
     return response;
   }
@@ -176,8 +181,14 @@ class Application extends Api {
     return response;
   }
 
-  static getWellnessScoresHistorical(data?: { from_date?: string; to_date?: string }) {
-    const response = this.post("/mobile/wellness_scores/historical", data || {});
+  static getWellnessScoresHistorical(data?: {
+    from_date?: string;
+    to_date?: string;
+  }) {
+    const response = this.post(
+      "/mobile/wellness_scores/historical",
+      data || {}
+    );
     return response;
   }
   static varifyPassword(data: any) {
