@@ -32,6 +32,7 @@ import {
   HelpCircle,
   Lock,
   Mail,
+  Settings,
   Shield,
   Trash2,
   User,
