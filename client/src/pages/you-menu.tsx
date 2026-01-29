@@ -547,6 +547,24 @@ export default function YouMenu() {
       });
   };
   const [loadingViewHtmlReport, setLoadingViewHtmlReport] = useState(false);
+  
+  // Handle browser back button to close modal
+  useEffect(() => {
+    const handlePopState = () => {
+      if (showHtmlReport) {
+        setShowHtmlReport(false);
+        // Clean up blob URL when closing
+        if (htmlReport) {
+          URL.revokeObjectURL(htmlReport);
+          setHtmlReport("");
+        }
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [showHtmlReport, htmlReport]);
+
   const handleViewHtmlReport = () => {
     if (!holisticPlanActionPlan.latest_deep_analysis) return;
 
@@ -561,6 +579,8 @@ export default function YouMenu() {
             const blobUrl = URL.createObjectURL(blob);
             setHtmlReport(blobUrl);
             setShowHtmlReport(true);
+            // Add hash to URL for history
+            window.history.pushState({ viewReport: true }, "", "#viewReport");
           });          
 
         } catch (error: any) {
@@ -580,6 +600,19 @@ export default function YouMenu() {
       });
   };
 
+  const handleCloseHtmlReport = () => {
+    // Clean up blob URL first
+    if (htmlReport) {
+      URL.revokeObjectURL(htmlReport);
+      setHtmlReport("");
+    }
+    setShowHtmlReport(false);
+    // Remove hash from URL without navigating
+    if (window.location.hash === "#viewReport") {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  };
+
   const renderMainView = () => (
     <div className="space-y-4">
       {showHtmlReport && (
@@ -589,7 +622,7 @@ export default function YouMenu() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setShowHtmlReport(false)}
+              onClick={handleCloseHtmlReport}
               className="h-8 w-8"
             >
               <X className="h-5 w-5" />

@@ -361,6 +361,7 @@ export default function Trends() {
       </>
     );
   };
+  
   return (
     <div className="min-h-screen pb-8 relative bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20">
       <div className="w-full max-w-sm mx-auto px-3 py-4 overflow-hidden">
@@ -607,7 +608,7 @@ export default function Trends() {
                               selectedBiomarker.status[0]
                             ),
                           }}
-                          className={`mt-2 text-xs`}
+                          className="mt-2 text-xs"
                         >
                           {selectedBiomarker.chart_bounds.filter(
                             (el: any) =>
@@ -636,33 +637,48 @@ export default function Trends() {
                           </span>
                           {resolveOptimalRangesSelectedBiomarker(
                             selectedBiomarker
-                          ).map((el: any, index: number) => {
-                            return (
-                              <div
-                                key={el.status}
-                                className="flex items-center"
-                              >
-                                {resolveOptimalRangesSelectedBiomarker(
-                                  selectedBiomarker
-                                ).length -
-                                  1 ==
-                                  index &&
-                                  index != 0 && <div className=" mr-4">-</div>}
-                                {resolveOptimalRange(el)}
-                                {/* <div className="ml-2"></div> */}
-                              </div>
-                            );
-                          })}
+                          ).length ? (
+                            resolveOptimalRangesSelectedBiomarker(
+                              selectedBiomarker
+                            ).map((el: any, index: number) => {
+                              return (
+                                <div
+                                  key={el.status}
+                                  className="flex items-center"
+                                >
+                                  {resolveOptimalRangesSelectedBiomarker(
+                                    selectedBiomarker
+                                  ).length -
+                                    1 ==
+                                    index &&
+                                    index != 0 && (
+                                      <div className=" mr-4">-</div>
+                                    )}
+                                  {resolveOptimalRange(el)}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <span className="text-xs text-gray-400">
+                              No reference range available yet.
+                            </span>
+                          )}
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600 dark:text-gray-400">
                             Last Test:
                           </span>
-                          <span className="text-sm font-medium">
-                            {new Date(
-                              selectedBiomarker.date[0]
-                            ).toLocaleDateString()}
-                          </span>
+                          {selectedBiomarker.date?.[0] ? (
+                            <span className="text-sm font-medium">
+                              {new Date(
+                                selectedBiomarker.date[0]
+                              ).toLocaleDateString()}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">
+                              No test date available.
+                            </span>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -675,9 +691,15 @@ export default function Trends() {
                     <h3 className="text-base font-medium mb-2">
                       About This Biomarker
                     </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed text-justify">
-                      {selectedBiomarker.more_info}
-                    </p>
+                    {selectedBiomarker.more_info ? (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed text-justify">
+                        {selectedBiomarker.more_info}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic text-justify">
+                        No description is available for this biomarker yet.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -687,27 +709,22 @@ export default function Trends() {
                   Recommendations to Improve
                 </h3>
                 <div className="grid gap-3">
-                  {/* {selectedBiomarker.recommendations.map((rec: string, index: number) => (
-                    <Card key={index} className="bg-gradient-to-br from-emerald-50/80 to-teal-50/60 dark:from-emerald-900/20 dark:to-teal-900/10">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <CheckCircle className="w-4 h-4 text-white" />
-                          </div>
-                          <p className="text-gray-700 dark:text-gray-300">{rec}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))} */}
                   <Card className="bg-gradient-to-br from-emerald-50/80 to-teal-50/60 dark:from-emerald-900/20 dark:to-teal-900/10">
                     <CardContent className="p-3">
                       <div className="flex items-start gap-2">
                         <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <CheckCircle className="w-3 h-3 text-white" />
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 text-justify">
-                          {selectedBiomarker.how_to_improve}
-                        </p>
+                        {selectedBiomarker.how_to_improve ? (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 text-justify">
+                            {selectedBiomarker.how_to_improve}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-400 italic text-justify">
+                            No specific recommendations are available for this
+                            biomarker yet.
+                          </p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -717,27 +734,22 @@ export default function Trends() {
               <TabsContent value="insights" className="space-y-3 mt-4">
                 <h3 className="text-base font-medium">AI-Generated Insights</h3>
                 <div className="grid gap-3">
-                  {/* {selectedBiomarker.insights.map((insight: string, index: number) => (
-                    <Card key={index} className="bg-gradient-to-br from-blue-50/80 to-indigo-50/60 dark:from-blue-900/20 dark:to-indigo-900/10">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <Brain className="w-4 h-4 text-white" />
-                          </div>
-                          <p className="text-gray-700 dark:text-gray-300">{insight}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))} */}
                   <Card className="bg-gradient-to-br from-blue-50/80 to-indigo-50/60 dark:from-blue-900/20 dark:to-indigo-900/10">
                     <CardContent className="p-3">
                       <div className="flex items-start gap-2">
                         <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Brain className="w-3 h-3 text-white" />
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 text-justify">
-                          {selectedBiomarker.insight}
-                        </p>
+                        {selectedBiomarker.insight ? (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 text-justify">
+                            {selectedBiomarker.insight}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-400 italic text-justify">
+                            No AI insights have been generated for this
+                            biomarker yet.
+                          </p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

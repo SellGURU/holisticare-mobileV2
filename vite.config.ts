@@ -31,12 +31,12 @@ export default defineConfig({
           theme_color: '#ffffff',
           icons: [
             {
-              src: '/icons/icon-192x192.png',
+              src: '/icons/ic_launcher192.png',
               sizes: '192x192',
               type: 'image/png',
             },
             {
-              src: '/icons/icon-512x512.png',
+              src: '/icons/ic_launcher.png',
               sizes: '512x512',
               type: 'image/png',
             },

@@ -31,6 +31,7 @@ axios.interceptors.response.use(
             localStorage.setItem("token", res.data.access_token);
             localStorage.setItem("encoded_mi", res.data.encoded_mi);
             localStorage.setItem("refresh_token", res.data.refresh_token);
+            window.location.reload()
           })
           .catch((err) => {
             const brandInfo = localStorage.getItem("brand_info");
