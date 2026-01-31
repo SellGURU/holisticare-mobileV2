@@ -39,6 +39,7 @@ interface WellnessScores {
   stress: number | null;
   calories: number | null;
   body: number | null;
+  readiness: number | null;
   global: number | null;
 }
 
@@ -106,7 +107,7 @@ const metricsConfig: MetricConfig[] = [
   },
   {
     key: 'heart',
-    label: 'Heart Health',
+    label: 'Heart',
     icon: HeartPulse,
     color: '#EC4899',
     tooltip: 'Based on: Average, minimum, and maximum heart rate, plus Heart Rate Variability (HRV). Higher HRV indicates better recovery and stress resilience.'
@@ -120,17 +121,24 @@ const metricsConfig: MetricConfig[] = [
   },
   {
     key: 'calories',
-    label: 'Metabolic',
+    label: 'Calories',
     icon: Flame,
     color: '#EAB308',
     tooltip: 'Based on: Total calories burned and active calories from movement/exercise. More daily activity and higher active burn improves this score.'
   },
   {
     key: 'body',
-    label: 'Body Composition',
+    label: 'Body',
     icon: PersonStanding,
     color: '#06B6D4',
     tooltip: 'Based on: Body Mass Index (BMI) and other body composition markers. Healthy weight-related metrics contribute to a higher score.'
+  },
+  {
+    key: 'readiness',
+    label: 'Readiness',
+    icon: Zap,
+    color: '#3B82F6',
+    tooltip: 'Based on: Sleep duration, sleep efficiency, resting heart rate, HRV, and time awake during sleep. Indicates physical capacity for the day.'
   },
 ];
 
@@ -247,6 +255,7 @@ const currentScores = {
     stress: 100.0,
     calories: 63.04,
     body: 20.0,
+    readiness: 65.0,
     global: 72.70
   },
   archetype: "Sedentary Worker",
@@ -283,6 +292,7 @@ const generateScoreHistory = (fromDate: Date, toDate: Date) => {
       stress: Math.round(Math.min(100, Math.max(75, 90 + baseVariation * 0.8 + getVariation(4))) * 10) / 10,
       calories: Math.round(Math.min(100, Math.max(45, 60 + baseVariation + getVariation(5))) * 10) / 10,
       body: Math.round(Math.min(100, Math.max(15, 19 + baseVariation * 0.3 + getVariation(6) * 0.5)) * 10) / 10,
+      readiness: Math.round(Math.min(100, Math.max(50, 65 + baseVariation * 0.6 + getVariation(8))) * 10) / 10,
       global: Math.round(Math.min(100, Math.max(60, 70 + baseVariation * 0.7 + getVariation(7))) * 10) / 10,
     });
   }
@@ -327,6 +337,8 @@ const scoreColors: Record<string, string> = {
   calories_metabolic: '#EAB308',
   body: '#06B6D4',
   body_composition: '#06B6D4',
+  // Readiness score
+  readiness: '#3B82F6',
   // Use a more distinct indigo for Global vs Body
   global: '#6b7280',
   global_wellness: '#6b7280',
@@ -340,15 +352,16 @@ const getColorForScore = (key: string): string => {
 const scoreLabels: Record<string, string> = {
   sleep: 'Sleep',
   activity: 'Activity',
-  heart: 'Heart Health',
-  heart_health: 'Heart Health',
+  heart: 'Heart',
+  heart_health: 'Heart',
   stress: 'Stress',
-  calories: 'Metabolic',
-  calories_metabolic: 'Metabolic',
-  body: 'Body Comp',
-  body_composition: 'Body Composition',
-  global: 'Global Wellness',
-  global_wellness: 'Global Wellness',
+  calories: 'Calories',
+  calories_metabolic: 'Calories',
+  body: 'Body',
+  body_composition: 'Body',
+  readiness: 'Readiness',
+  global: 'Global',
+  global_wellness: 'Global',
 };
 
 function CircularProgress({ 
@@ -644,7 +657,7 @@ export default function WearableDashboard() {
         const newScoreDetails: Record<string, ScoreMetadata> = {};
         const normalizedScores: WellnessScores = {
           sleep: null, activity: null, heart: null, stress: null,
-          calories: null, body: null, global: null,
+          calories: null, body: null, readiness: null, global: null,
         };
         
         // Process each score type
@@ -655,6 +668,7 @@ export default function WearableDashboard() {
           { keyword: 'stress', key: 'stress' },
           { keyword: 'calor', key: 'calories', altKeyword: 'metabolic' },
           { keyword: 'body', key: 'body' },
+          { keyword: 'readiness', key: 'readiness' },
           { keyword: 'global', key: 'global' },
         ];
         
@@ -796,11 +810,11 @@ export default function WearableDashboard() {
         };
       }
       
-      // API returns array: [{ historical: [...], date_range: {...} }]
-      // Need to unwrap the array first
+      // API returns: { historical: [...], date_range: {...} }
+      // May also be wrapped in array for backward compatibility
       const unwrappedData = Array.isArray(responseData) ? responseData[0] : responseData;
       const historicalArray = unwrappedData?.historical;
-      console.log('🔍 Unwrapped historical array:', historicalArray);
+      console.log('🔍 Historical array:', historicalArray);
       
       // Helper function to normalize API name to consistent key
       const normalizeToKey = (name: string): string | null => {
@@ -816,6 +830,7 @@ export default function WearableDashboard() {
         if (nameLower.includes('stress')) return 'stress';
         if (nameLower.includes('calor') || nameLower.includes('metabolic')) return 'calories';
         if (nameLower.includes('body') || nameLower.includes('composition')) return 'body';
+        if (nameLower.includes('readiness')) return 'readiness';
         if (nameLower.includes('global') || nameLower.includes('wellness')) return 'global';
         
         return null;
@@ -840,7 +855,7 @@ export default function WearableDashboard() {
         }
         
         // Initialize 0 values for all standard score keys across all dates (shows flat line at bottom)
-        const standardKeys = ['sleep', 'activity', 'heart', 'stress', 'calories', 'body', 'global'];
+        const standardKeys = ['sleep', 'activity', 'heart', 'stress', 'calories', 'body', 'readiness', 'global'];
         Object.keys(allDatesInRange).forEach(dateKey => {
           standardKeys.forEach(key => {
             if (allDatesInRange[dateKey][key] === undefined) {
@@ -908,7 +923,7 @@ export default function WearableDashboard() {
     setHasWearableData(true);
     setIsLoading(false);
     // Set all scores as present and visible for demo
-    const allScores = ['global', 'sleep', 'activity', 'heart', 'stress', 'calories', 'body'];
+    const allScores = ['global', 'sleep', 'activity', 'heart', 'stress', 'calories', 'body', 'readiness'];
     setPresentScores(allScores);
     setVisibleScores(allScores);
     setScoreHistory(generateScoreHistory(dateRange.from, dateRange.to));
@@ -1253,7 +1268,7 @@ export default function WearableDashboard() {
           
           {/* Score Legend Toggles - Only show present scores */}
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {(showDemo ? ['sleep', 'activity', 'heart', 'stress', 'calories', 'body', 'global'] : presentScores).map((key) => {
+            {(showDemo ? ['sleep', 'activity', 'heart', 'stress', 'calories', 'body', 'readiness', 'global'] : presentScores).map((key) => {
               // Use dynamic name from API, fallback to static label
               const details = scoreDetails[key];
               const displayLabel = details?.name?.replace(/\s*Score\s*$/i, '') || scoreLabels[key] || key;

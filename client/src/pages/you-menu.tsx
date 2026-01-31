@@ -911,7 +911,7 @@ export default function YouMenu() {
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {wellnessScore.scores.filter((el: any) => {
-                  return el.name.toLowerCase().includes('activity score');
+                  return el.name.toLowerCase().includes('activity');
                 })[0]?.score || 0}
               </p>
             </div>
@@ -923,7 +923,7 @@ export default function YouMenu() {
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {wellnessScore.scores.filter((el: any) => {
-                  return el.name.toLowerCase().includes('stress score');
+                  return el.name.toLowerCase().includes('stress');
                 })[0]?.score || 0}
               </p>
             </div>
@@ -935,7 +935,7 @@ export default function YouMenu() {
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {wellnessScore.scores.filter((el: any) => {
-                return el.name.toLowerCase().includes('heart health score');
+                return el.name.toLowerCase().includes('heart');
               })[0]?.score || 0}
               </p>
             </div>
