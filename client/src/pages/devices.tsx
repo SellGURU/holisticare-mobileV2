@@ -1,4 +1,5 @@
 import Application from "@/api/app";
+import { getRookConfigForSdk } from "@/api/rook";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,6 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Watch, ArrowLeft } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import Api from "@/api/api";
 
 export default function Devices() {
   const { fetchClientInformation } = useAuth();
@@ -158,31 +158,40 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
 
     setIsLoadingDevices(true);
     try {
-      const response = await fetch(
-        `https://api.rook-connect.com/api/v1/client_uuid/c2f4961b-9d3c-4ff0-915e-f70655892b89/user_id/${clientInformation.id}/data_sources/authorizers`,
-        {
-          method: "GET",
-          headers: {
-            Authorization:
-              "Basic Y2xpZW50X3V1aWQ6UUg4dTE4T2pMb2ZzU1J2bUVEbUdCZ2p2MWZycDNmYXBkYkRB",
-            "Content-Type": "application/json",
-          },
-        }
+      const res = await Application.rookAuthorizedDataSources({ user_id: clientInformation.id });
+      const data = res.data;
+      // Exclude Apple Health, Health Connect, Android from the list
+      const EXCLUDED_DATA_SOURCES = ["Apple Health", "Health Connect", "Android", "Whoop", "Dexcom"];
+      const filteredSources = (data?.data_sources || []).filter(
+        (el: { data_source: string }) => !EXCLUDED_DATA_SOURCES.includes(el.data_source)
       );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setDevicesData(data);
+      // Descriptions for each data source
+      const DATA_SOURCE_DESCRIPTIONS: Record<string, string> = {
+        Polar:
+          "Polar Flow allows you to analyze sports activity and fitness and is used with GPS-enabled heart rate monitors, fitness devices and activity trackers from Polar.* Track your training and activity and instantly see your achievements. You can view all your training and activity data on your phone on the go and wireless sync it to the Polar Flow service",
+        Fitbit:
+          "Fitbit is part of Google. Together we can make health and well -being more accessible to more people. We present one of the most important applications in the world about health and fitness. Use the Fitbit application alone to monitor basic statistics and maintain motivation.",
+        Garmin:
+          "Garmin Connect is the tool for tracking, analyzing and sharing health and fitness activities from your Garmin device.",
+        Withings: "Delivering reliable medical, health and wellness data with a better experience.",
+        Oura:
+          "Health tracking wrapped around your finger — track your sleep, activity, recovery in style.",
+      };
+      // Map API response (data_source, authorized, image) to UI shape (name, connected, description, image)
+      const mapped = {
+        data_sources: filteredSources.map((el: { data_source: string; authorized: boolean; image: string }) => ({
+          name: el.data_source,
+          connected: el.authorized,
+          description: DATA_SOURCE_DESCRIPTIONS[el.data_source] ?? "",
+          image: el.image,
+        })),
+      };
+      setDevicesData(mapped);
 
       toast({
         title: "Success",
         description: "Devices data loaded successfully",
       });
-
-
     } catch (error) {
       console.error("Error fetching devices data:", error);
       toast({
@@ -263,26 +272,21 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
   }, [openedWindow, fetchDevicesData]);
 
   async function revokeRookDataSource(sourceOrId: string) {
-    const encodedCreds = btoa(`c2f4961b-9d3c-4ff0-915e-f70655892b89:QH8u18OjLofsSRvmEDmGBgjv1frp3fapdbDA`);
-    const body = { data_source: sourceOrId };
-    if(!clientInformation){
-      return;
+    if (!clientInformation?.id) return;
+    try {
+      await Application.rookRevokeDataSource({
+        user_id: clientInformation.id,
+        data_source: sourceOrId,
+      });
+      await fetchDevicesData();
+    } catch (e) {
+      console.error("Revoke Rook data source error:", e);
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Failed to revoke",
+        variant: "destructive",
+      });
     }
-    const response = await fetch(
-      `https://api.rook-connect.com/api/v1/user_id/${clientInformation?.id || '1'}/data_sources/revoke_auth`,
-      {
-        method: "POST",
-        body: JSON.stringify(body),
-        headers: {
-            "Authorization": "Basic YzJmNDk2MWItOWQzYy00ZmYwLTkxNWUtZjcwNjU1ODkyYjg5OlFIOHUxOE9qTG9mc1NSdm1FRG1HQmdqdjFmcnAzZmFwZGJEQQ==",
-            "Content-Type": "application/json",
-        },
-      }
-    );   
-    if(response){
-      fetchDevicesData()
-    } 
-    // TODO: Implement revoke API call
   }
 
   const connectSdk = () => {
@@ -293,12 +297,22 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
     setIsConnecting("connecting");
 
     const initRook = async (userId: string) => {
+      const rookConfig = getRookConfigForSdk();
+      if (!rookConfig) {
+        toast({
+          title: "Configuration Error",
+          description: "Rook credentials not configured. Set VITE_ROOK_CLIENT_UUID and VITE_ROOK_PASSWORD.",
+          variant: "destructive",
+        });
+        setIsConnecting("disconnected");
+        return;
+      }
       try {
         // 1. Initialize Rook SDK
         await RookConfig.initRook({
           environment: "production",
-          clientUUID: "c2f4961b-9d3c-4ff0-915e-f70655892b89",
-          password: "QH8u18OjLofsSRvmEDmGBgjv1frp3fapdbDA",
+          clientUUID: rookConfig.clientUUID,
+          password: rookConfig.password,
           enableBackgroundSync: true,
           enableEventsBackgroundSync: true,
         });
@@ -404,10 +418,14 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
       /* ------------------------------------------------------------------ */
       /* 1️⃣ Init Rook SDK */
       /* ------------------------------------------------------------------ */
+      const rookConfig = getRookConfigForSdk();
+      if (!rookConfig) {
+        throw new Error("Rook credentials not configured. Set VITE_ROOK_CLIENT_UUID and VITE_ROOK_PASSWORD.");
+      }
       await RookConfig.initRook({
         environment: "production",
-        clientUUID: "c2f4961b-9d3c-4ff0-915e-f70655892b89",
-        password: "QH8u18OjLofsSRvmEDmGBgjv1frp3fapdbDA",
+        clientUUID: rookConfig.clientUUID,
+        password: rookConfig.password,
         enableBackgroundSync: false, // ⛔️ فعلاً خاموش
         enableEventsBackgroundSync: false,
       });
@@ -782,21 +800,31 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
                               revokeRookDataSource(source.name).then(() => {
                                 toast({
                                   title: "Disconnect",
-                                  description: `Disconnect from ${source.name}`,
+                                  description: `Disconnected from ${source.name}`,
                                 });
-                                // fetchDevicesData();
                               });
                             } else {
-                              const newWindow = window.open(
-                                source.authorization_url,
-                                "_blank"
-                              );
-                              if (newWindow) {
-                                setOpenedWindow(newWindow);
-                              }
-                              toast({
-                                title: "Connecting",
-                                description: `Opening ${source.name} authorization...`,
+                              Application.rookAuthorizedDataSource({
+                                data_source:source.name,
+                                user_id:clientInformation?.id! as string
+                              }).then((res) => {
+                                  const newWindow = window.open(
+                                    res.data.authorization_url,
+                                    "_blank"
+                                  );
+                                  if (newWindow) {
+                                    setOpenedWindow(newWindow);
+                                  }
+                                toast({
+                                  title: "Connecting",
+                                  description: `Opening ${source.name} authorization...`,
+                                });
+                              }).catch((err) => {
+                                toast({
+                                  title: "Error",
+                                  description: `Failed to connect to ${source.name}: ${err.message}`,
+                                  variant: "destructive",
+                                });
                               });
                             }
                           }}

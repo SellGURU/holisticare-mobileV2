@@ -195,6 +195,17 @@ class Application extends Api {
     const response = this.post("/mobile/auth/verify_password", data);
     return response;
   }
+
+  // Rook API (v2)
+  static rookAuthorizedDataSources(data: { user_id: string }) {
+    return this.post("/rook/authorized_data_sources", data);
+  }
+  static rookAuthorizedDataSource(data: { user_id: string; data_source: string }) {
+    return this.post("/rook/authorized_data_source", data);
+  }
+  static rookRevokeDataSource(data: { user_id: string; data_source: string }) {
+    return this.post("/rook/revoke_data_source", data);
+  }
 }
 
 export default Application;

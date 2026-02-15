@@ -19,4 +19,15 @@ const resolveBaseUrl = () => {
   return baseProductUrl;
 };
 
-export { resolveBaseEndPoint, resolveBaseUrl, env };
+// Rook: use proxy (no credentials on client) when set; otherwise use env credentials
+const getRookProxyBase = (): string | undefined =>
+  (import.meta as any).env?.VITE_ROOK_PROXY_BASE?.trim() || undefined;
+
+const getRookCredentials = (): { clientUUID: string; password: string } | undefined => {
+  const clientUUID = (import.meta as any).env?.VITE_ROOK_CLIENT_UUID?.trim();
+  const password = (import.meta as any).env?.VITE_ROOK_PASSWORD?.trim();
+  if (clientUUID && password) return { clientUUID, password };
+  return undefined;
+};
+
+export { resolveBaseEndPoint, resolveBaseUrl, env, getRookProxyBase, getRookCredentials };

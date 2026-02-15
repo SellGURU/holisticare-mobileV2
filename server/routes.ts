@@ -241,6 +241,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ user: userWithoutPassword });
   });
 
+  // Rook Connect API proxy (credentials stay on server)
+  const ROOK_API_URL = process.env.ROOK_API_URL || "https://api.rook-connect.com";
+  const ROOK_CLIENT_UUID = process.env.ROOK_CLIENT_UUID;
+  const ROOK_PASSWORD = process.env.ROOK_PASSWORD;
+
+  app.get("/api/rook/authorizers", async (req, res) => {
+    const userId = isAuthenticated(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (!ROOK_CLIENT_UUID || !ROOK_PASSWORD) {
+      return res.status(503).json({ message: "Rook integration not configured" });
+    }
+    try {
+      const auth = Buffer.from(`${ROOK_CLIENT_UUID}:${ROOK_PASSWORD}`).toString("base64");
+      const url = `${ROOK_API_URL}/api/v1/client_uuid/${ROOK_CLIENT_UUID}/user_id/${userId}/data_sources/authorizers`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        return res.status(response.status).json({ message: text || "Rook API error" });
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Rook authorizers error:", error);
+      res.status(500).json({ message: "Failed to fetch Rook authorizers" });
+    }
+  });
+
+  app.post("/api/rook/revoke", async (req, res) => {
+    const userId = isAuthenticated(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (!ROOK_CLIENT_UUID || !ROOK_PASSWORD) {
+      return res.status(503).json({ message: "Rook integration not configured" });
+    }
+    try {
+      const { data_source: dataSource } = req.body;
+      if (!dataSource || typeof dataSource !== "string") {
+        return res.status(400).json({ message: "data_source is required" });
+      }
+      const auth = Buffer.from(`${ROOK_CLIENT_UUID}:${ROOK_PASSWORD}`).toString("base64");
+      const url = `${ROOK_API_URL}/api/v1/user_id/${userId}/data_sources/revoke_auth`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ data_source: dataSource }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        return res.status(response.status).json({ message: text || "Rook API error" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Rook revoke error:", error);
+      res.status(500).json({ message: "Failed to revoke Rook data source" });
+    }
+  });
+
   // Get client information mobile
   app.get("/api/client_information_mobile", async (req, res) => {
     const userId = isAuthenticated(req);

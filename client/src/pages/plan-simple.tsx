@@ -212,20 +212,17 @@ export default function Plan() {
 
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  useEffect(() => {
-    todaysTasks.forEach((task) => {
-      setTaskValues((prev) => ({
-        ...prev,
-        [task.task_id]: task.Temp_value || 0,
-      }));
-    });
-  }, [todaysTasks]);
-
   const handleGetTodayTasks = async () => {
     setIsLoading(true);
     Application.getTodayTasks()
       .then((res) => {
-        setTodaysTasks(res.data);
+        const tasks: Task[] = res.data;
+        setTodaysTasks(tasks);
+        const initialValues: Record<string, number> = {};
+        tasks.forEach((task: Task) => {
+          initialValues[task.task_id] = task.Temp_value ?? 0;
+        });
+        setTaskValues(initialValues);
       })
       .catch((res) => {
         toast({
@@ -473,10 +470,10 @@ export default function Plan() {
   };
 
   const updateTaskValue = (taskId: string, value: number) => {
-    setTaskValues({
-      ...taskValues,
+    setTaskValues((prev) => ({
+      ...prev,
       [taskId]: Number(value),
-    });
+    }));
   };
 
   const renderTaskDetails = (task: Task, isCurrentDay: boolean) => {
@@ -954,51 +951,51 @@ export default function Plan() {
                                 variant={completed ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => {
-                                  if (
-                                    (task.Category === "Lifestyle" &&
-                                      taskValues[task.task_id] ===
-                                        task.Value) ||
-                                    task.Category !== "Lifestyle"
-                                  ) {
+                                  const currentValue =
+                                    taskValues[task.task_id] ?? 0;
+                                  const isLifestyle =
+                                    task.Category === "Lifestyle";
+                                  const valueMatchesTarget =
+                                    currentValue === (task.Value ?? 0);
+
+                                  if (!isLifestyle) {
                                     handleUpdateTaskStatus(
                                       task.task_id,
                                       !task.Status,
-                                      taskValues[task.task_id] || 0
+                                      currentValue
                                     );
-                                  } else if (
-                                    task.Category === "Lifestyle" &&
-                                    completed &&
-                                    taskValues[task.task_id] !== task.Value
-                                  ) {
-                                    handleUpdateTaskStatus(
-                                      task.task_id,
-                                      !task.Status,
-                                      taskValues[task.task_id] || 0
-                                    );
-                                  }
-                                  if (task.Category === "Lifestyle") {
-                                    handleUpdateValue(
-                                      task.task_id,
-                                      taskValues[task.task_id] || 0
-                                    );
-                                  }
-                                  if (
-                                    (task.Category === "Lifestyle" &&
-                                      taskValues[task.task_id] ===
-                                        task.Value) ||
-                                    task.Category !== "Lifestyle"
-                                  ) {
                                     if (completed) {
                                       handleUncheckTask(task.task_id);
                                     } else {
                                       handleCheckTask(task.task_id);
                                     }
-                                  } else if (
-                                    task.Category === "Lifestyle" &&
-                                    completed &&
-                                    taskValues[task.task_id] !== task.Value
-                                  ) {
-                                    handleUncheckTask(task.task_id);
+                                  } else {
+                                    handleUpdateValue(
+                                      task.task_id,
+                                      currentValue
+                                    );
+                                    if (valueMatchesTarget) {
+                                      const newCompleted = !completed;
+                                      handleUpdateTaskStatus(
+                                        task.task_id,
+                                        newCompleted,
+                                        currentValue
+                                      );
+                                      if (newCompleted) {
+                                        handleCheckTask(task.task_id);
+                                      } else {
+                                        handleUncheckTask(task.task_id);
+                                      }
+                                    } else {
+                                      handleUpdateTaskStatus(
+                                        task.task_id,
+                                        false,
+                                        currentValue
+                                      );
+                                      if (completed) {
+                                        handleUncheckTask(task.task_id);
+                                      }
+                                    }
                                   }
                                 }}
                                 className={`w-full ${
@@ -1237,53 +1234,63 @@ export default function Plan() {
                                           size="sm"
                                           disabled={!isCurrentDay}
                                           onClick={() => {
-                                            if (
-                                              (task.Category === "Lifestyle" &&
-                                                taskValues[task.task_id] ===
-                                                  task.Value) ||
-                                              task.Category !== "Lifestyle"
-                                            ) {
+                                            const currentValue =
+                                              taskValues[task.task_id] ?? 0;
+                                            const isLifestyle =
+                                              task.Category === "Lifestyle";
+                                            const valueMatchesTarget =
+                                              currentValue ===
+                                              (task.Value ?? 0);
+
+                                            if (!isLifestyle) {
                                               handleUpdateTaskStatus(
                                                 task.task_id,
                                                 !task.Status,
-                                                taskValues[task.task_id] || 0
+                                                currentValue
                                               );
-                                            } else if (
-                                              task.Category === "Lifestyle" &&
-                                              completed &&
-                                              taskValues[task.task_id] !==
-                                                task.Value
-                                            ) {
-                                              handleUpdateTaskStatus(
-                                                task.task_id,
-                                                !task.Status,
-                                                taskValues[task.task_id] || 0
-                                              );
-                                            }
-                                            if (task.Category === "Lifestyle") {
+                                              if (completed) {
+                                                handleUncheckTask(
+                                                  task.task_id
+                                                );
+                                              } else {
+                                                handleCheckTask(
+                                                  task.task_id
+                                                );
+                                              }
+                                            } else {
                                               handleUpdateValue(
                                                 task.task_id,
-                                                taskValues[task.task_id] || 0
+                                                currentValue
                                               );
-                                            }
-                                            if (
-                                              (task.Category === "Lifestyle" &&
-                                                taskValues[task.task_id] ===
-                                                  task.Value) ||
-                                              task.Category !== "Lifestyle"
-                                            ) {
-                                              if (completed) {
-                                                handleUncheckTask(task.task_id);
+                                              if (valueMatchesTarget) {
+                                                const newCompleted =
+                                                  !completed;
+                                                handleUpdateTaskStatus(
+                                                  task.task_id,
+                                                  newCompleted,
+                                                  currentValue
+                                                );
+                                                if (newCompleted) {
+                                                  handleCheckTask(
+                                                    task.task_id
+                                                  );
+                                                } else {
+                                                  handleUncheckTask(
+                                                    task.task_id
+                                                  );
+                                                }
                                               } else {
-                                                handleCheckTask(task.task_id);
+                                                handleUpdateTaskStatus(
+                                                  task.task_id,
+                                                  false,
+                                                  currentValue
+                                                );
+                                                if (completed) {
+                                                  handleUncheckTask(
+                                                    task.task_id
+                                                  );
+                                                }
                                               }
-                                            } else if (
-                                              task.Category === "Lifestyle" &&
-                                              completed &&
-                                              taskValues[task.task_id] !==
-                                                task.Value
-                                            ) {
-                                              handleUncheckTask(task.task_id);
                                             }
                                           }}
                                           className={`w-full ${

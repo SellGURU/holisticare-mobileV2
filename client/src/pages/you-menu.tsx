@@ -779,13 +779,26 @@ export default function YouMenu() {
       )}
 
       {/* Your Plan Card */}
-      {hasHealthData && (
-        <Card
-          className="cursor-pointer hover:shadow-2xl transition-all duration-500 bg-gradient-to-br from-teal-50/50 via-white/50 to-cyan-50/50 dark:from-teal-900/20 dark:via-gray-800/50 dark:to-cyan-900/20 border-0 shadow-xl backdrop-blur-lg"
-          onClick={() => setLocation("/plan")}
-        >
-          <CardContent className="p-4 relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-cyan-500/5 rounded-lg"></div>
+      <Card
+        className={`hover:shadow-2xl transition-all duration-500 bg-gradient-to-br from-teal-50/50 via-white/50 to-cyan-50/50 dark:from-teal-900/20 dark:via-gray-800/50 dark:to-cyan-900/20 border-0 shadow-xl backdrop-blur-lg ${hasHealthData ? "cursor-pointer" : ""}`}
+        onClick={hasHealthData ? () => setLocation("/plan") : undefined}
+      >
+        <CardContent className="p-4 relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-cyan-500/5 rounded-lg"></div>
+          {!hasHealthData ? (
+            <div className="relative flex flex-col items-center text-center px-4 py-4">
+              <div className="w-20 h-20 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mb-4">
+                <Target className="w-8 h-8 text-teal-500" />
+              </div>
+              <h4 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">
+                No Action Plan Yet
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                Complete your health profile and add health data to get
+                personalized goals, challenges and action plans.
+              </p>
+            </div>
+          ) : (
             <div className="relative flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-full flex items-center justify-center shadow-lg">
@@ -852,9 +865,9 @@ export default function YouMenu() {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
  {/* wellneess */}
       <Card
   className="w-full  mx-auto rounded-2xl
@@ -911,7 +924,7 @@ export default function YouMenu() {
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {wellnessScore.scores.filter((el: any) => {
-                  return el.name.toLowerCase().includes('activity score');
+                  return el.name.toLowerCase().includes('activity');
                 })[0]?.score || 0}
               </p>
             </div>
@@ -923,7 +936,7 @@ export default function YouMenu() {
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {wellnessScore.scores.filter((el: any) => {
-                  return el.name.toLowerCase().includes('stress score');
+                  return el.name.toLowerCase().includes('stress');
                 })[0]?.score || 0}
               </p>
             </div>
@@ -935,7 +948,7 @@ export default function YouMenu() {
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {wellnessScore.scores.filter((el: any) => {
-                return el.name.toLowerCase().includes('heart health score');
+                return el.name.toLowerCase().includes('heart');
               })[0]?.score || 0}
               </p>
             </div>
@@ -1035,6 +1048,20 @@ export default function YouMenu() {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
+          {questionnaires.length === 0 ? (
+            <div className="flex flex-col items-center text-center px-4 py-6">
+              <div className="w-20 h-20 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mb-4">
+                <BookOpen className="w-8 h-8 text-violet-500" />
+              </div>
+              <h4 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">
+                No Questionnaires Assigned
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                Complete your health profile and your coach may assign you
+                questionnaires to better understand your health.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-1">
             {questionnaires.map((questionnaire) => (
               <div
@@ -1108,6 +1135,7 @@ export default function YouMenu() {
               </div>
             ))}
           </div>
+          )}
         </CardContent>
       </Card>
       {openIframe && (
@@ -1129,32 +1157,60 @@ export default function YouMenu() {
       )}
 
       {/* Health Summary Card */}
-      {hasHealthData && (
-        <Card className="bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900/50 dark:via-gray-800/50 dark:to-gray-900/50 border-0 shadow-xl backdrop-blur-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-thin flex items-center gap-2">
-              <div
-                className="w-6 h-6 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center"
-                style={{
-                  background: `${
-                    brandInfo ? brandInfo?.primary_color : undefined
-                  }`,
-                }}
-              >
-                <Heart className="w-3 h-3 text-white" />
+      <Card className="bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900/50 dark:via-gray-800/50 dark:to-gray-900/50 border-0 shadow-xl backdrop-blur-lg">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-thin flex items-center gap-2">
+            <div
+              className="w-6 h-6 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center"
+              style={{
+                background: `${
+                  brandInfo ? brandInfo?.primary_color : undefined
+                }`,
+              }}
+            >
+              <Heart className="w-3 h-3 text-white" />
+            </div>
+            Health Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {!hasHealthData || biomarkersData.length === 0 ? (
+            <div className="flex flex-col items-center text-center px-4 py-6">
+              <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
+                <Heart className="w-8 h-8 text-emerald-500" />
               </div>
-              Health Summary
-            </CardTitle>
-          </CardHeader>
-          <CategoryCards data={biomarkersData} />
-        </Card>
-      )}
+              <h4 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">
+                No Health Summary
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                Complete your health profile and connect lab data to see your
+                biomarkers summary.
+              </p>
+            </div>
+          ) : (
+            <CategoryCards data={biomarkersData} />
+          )}
+        </CardContent>
+      </Card>
 
       {/* Latest Deep Analysis Card */}
-      {hasHealthData && (
-        <Card className="cursor-pointer hover:shadow-2xl transition-all duration-500 bg-gradient-to-br from-purple-50/50 via-white/50 to-indigo-50/50 dark:from-purple-900/20 dark:via-gray-800/50 dark:to-indigo-900/20 border-0 shadow-xl backdrop-blur-lg">
-          <CardContent className="p-4 relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 rounded-lg"></div>
+      <Card className="hover:shadow-2xl transition-all duration-500 bg-gradient-to-br from-purple-50/50 via-white/50 to-indigo-50/50 dark:from-purple-900/20 dark:via-gray-800/50 dark:to-indigo-900/20 border-0 shadow-xl backdrop-blur-lg">
+        <CardContent className="p-4 relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 rounded-lg"></div>
+          {!hasHealthData || !holisticPlanActionPlan.latest_deep_analysis ? (
+            <div className="relative flex flex-col items-center text-center px-4 py-6">
+              <div className="w-20 h-20 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4">
+                <Brain className="w-8 h-8 text-purple-500" />
+              </div>
+              <h4 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">
+                No Deep Analysis Yet
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                Complete your health profile and add health data to generate
+                your first Deep Analysis with personalized interventions.
+              </p>
+            </div>
+          ) : (
             <div className="relative">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3 flex-1">
@@ -1244,9 +1300,9 @@ export default function YouMenu() {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
     </div>
   );
