@@ -144,6 +144,10 @@ class Application extends Api {
     const response = this.post("/mobile/show_brand_info", {});
     return response;
   }
+  static getPublicBrandInfo(slug: string) {
+    const encoded = encodeURIComponent(slug);
+    return this.getPublic(`/mobile/public_brand_info?clinic=${encoded}`);
+  }
   static getHtmlReport() {
     const response = this.post("/mobile/get_html_report", {});
     return response;

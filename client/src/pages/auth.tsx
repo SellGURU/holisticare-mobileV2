@@ -1,3 +1,4 @@
+import Application from "@/api/app";
 import Auth from "@/api/auth";
 import ForgotPasswordModal from "@/components/auth/forgot-password-modal";
 import CustomTimezoneField from "@/components/CustomTimezoneField/CustomTimezoneField";
@@ -211,26 +212,63 @@ export default function AuthPage() {
     }, 500);
   };
   const [brandInfo, setBrandInfo] = useState<{
-    last_update: string;
+    last_update?: string;
     logo: string;
     name: string;
     headline: string;
     primary_color: string;
     secondary_color: string;
-    tone: string;
-    focus_area: string;
+    tone?: string;
+    focus_area?: string;
+    slug?: string;
   }>();
 
   useEffect(() => {
-    const storedBrandInfo = localStorage.getItem("brand_info");
-    if (storedBrandInfo) {
+    const readClinicSlug = () =>
+      (new URLSearchParams(window.location.search).get("clinic") || "")
+        .trim()
+        .toLowerCase();
+
+    const applyStoredBrand = () => {
+      const storedBrandInfo = localStorage.getItem("brand_info");
+      if (!storedBrandInfo) {
+        return;
+      }
       try {
-        const parsedInfo = JSON.parse(storedBrandInfo);
-        setBrandInfo(parsedInfo);
+        setBrandInfo(JSON.parse(storedBrandInfo));
       } catch (error) {
         console.error("Error parsing brand_info from localStorage:", error);
       }
-    }
+    };
+
+    const loadPublicBrand = (clinicSlug: string) => {
+      Application.getPublicBrandInfo(clinicSlug)
+        .then((res) => {
+          const info = res.data?.brand_elements;
+          if (!info) {
+            return;
+          }
+          setBrandInfo(info);
+          localStorage.setItem("brand_info", JSON.stringify(info));
+          localStorage.setItem("clinic_slug", clinicSlug);
+        })
+        .catch(() => {
+          setBrandInfo(undefined);
+        });
+    };
+
+    const loadBrand = () => {
+      const clinicSlug = readClinicSlug();
+      if (clinicSlug) {
+        loadPublicBrand(clinicSlug);
+        return;
+      }
+      applyStoredBrand();
+    };
+
+    loadBrand();
+    window.addEventListener("popstate", loadBrand);
+    return () => window.removeEventListener("popstate", loadBrand);
   }, []);
   const fillTestCredentials = () => {
     setLoginData({

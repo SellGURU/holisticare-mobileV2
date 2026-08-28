@@ -8,10 +8,14 @@ const REFRESH_TIMEOUT_MS = 10000;
 
 function clearSessionKeepPrefs() {
   const brandInfo = localStorage.getItem("brand_info");
+  const clinicSlug = localStorage.getItem("clinic_slug");
   const biometricEnabled = localStorage.getItem("biometric_enabled");
   localStorage.clear();
   if (brandInfo) {
     localStorage.setItem("brand_info", brandInfo);
+  }
+  if (clinicSlug) {
+    localStorage.setItem("clinic_slug", clinicSlug);
   }
   if (biometricEnabled) {
     localStorage.setItem("biometric_enabled", biometricEnabled);
@@ -42,7 +46,8 @@ axios.interceptors.response.use(
       const isAuthEndpoint =
         requestUrl.includes("/auth/mobile_token") ||
         requestUrl.includes("/auth/mobile_register") ||
-        requestUrl.includes("/auth/mobile_refresh");
+        requestUrl.includes("/auth/mobile_refresh") ||
+        requestUrl.includes("/mobile/public_brand_info");
 
       if (!isAuthEndpoint) {
         if (!isHandlingAuthError) {

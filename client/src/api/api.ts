@@ -57,6 +57,16 @@ class Api {
     return response;
   }
 
+  protected static getPublic(url: string, config?: any) {
+    const response = axios.get(this.base_url + url, {
+      headers: {
+        "Content-Type": config?.headers?.["Content-Type"] || "application/json",
+      },
+      timeout: config?.timeout ?? 15000,
+    });
+    return response;
+  }
+
   protected static getCheck(value: string) {
     const response = axios.get(value, {
       method: "GET",
