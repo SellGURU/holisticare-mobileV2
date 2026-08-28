@@ -252,7 +252,8 @@ export default function AuthPage() {
           localStorage.setItem("brand_info", JSON.stringify(info));
           localStorage.setItem("clinic_slug", clinicSlug);
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error("Failed to load public clinic brand:", error);
           setBrandInfo(undefined);
         });
     };

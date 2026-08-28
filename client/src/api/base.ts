@@ -3,9 +3,28 @@ const baseTestEndPoint = "https://vercel-backend-one-roan.vercel.app/holisticare
 const baseProductUrl = 'https://holisticare.vercel.app'
 const baseTestUrl = 'https://holisticare-develop.vercel.app'
 const localurl= 'http://127.0.0.1:3800'
-let  env: 'test' | 'production' | 'local' = 'production';
+
+function resolveEnv(): 'test' | 'production' | 'local' {
+  const fromVite = (import.meta as any).env?.VITE_API_ENV as string | undefined;
+  if (fromVite === "local" || fromVite === "test" || fromVite === "production") {
+    return fromVite;
+  }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "local";
+    }
+  }
+  if ((import.meta as any).env?.DEV) {
+    return "local";
+  }
+  return "production";
+}
+
+let env: 'test' | 'production' | 'local' = resolveEnv();
 
 const resolveBaseEndPoint = () => {
+  env = resolveEnv();
   if (env == "local") {
     return localurl;
   }

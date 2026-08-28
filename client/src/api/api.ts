@@ -3,7 +3,9 @@ import axios from "axios";
 import { getTokenFromLocalStorage } from "../store/token";
 import { resolveBaseEndPoint} from "./base";
 class Api {
-  protected static base_url: string =resolveBaseEndPoint();
+  protected static get base_url(): string {
+    return resolveBaseEndPoint();
+  }
   protected static post(url: string, data?: any, config?: any) {
     if (!config?.noPending) {
     }
