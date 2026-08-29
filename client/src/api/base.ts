@@ -4,16 +4,23 @@ const baseProductUrl = 'https://holisticare.vercel.app'
 const baseTestUrl = 'https://holisticare-develop.vercel.app'
 const localurl= 'http://127.0.0.1:3800'
 
+function isLocalDevHost(host: string) {
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+  );
+}
+
 function resolveEnv(): 'test' | 'production' | 'local' {
   const fromVite = (import.meta as any).env?.VITE_API_ENV as string | undefined;
   if (fromVite === "local" || fromVite === "test" || fromVite === "production") {
     return fromVite;
   }
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return "local";
-    }
+  if (typeof window !== "undefined" && isLocalDevHost(window.location.hostname)) {
+    return "local";
   }
   if ((import.meta as any).env?.DEV) {
     return "local";
