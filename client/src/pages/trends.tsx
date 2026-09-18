@@ -24,6 +24,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { resolveAnalyseIcon } from "../help";
 import BiomarkerChart from "@/components/trends/biomarkerChart";
+import DeferredHistoricalChart from "@/components/trends/DeferredHistoricalChart";
 
 // Mock biomarker data for enhanced UI
 // const mockBiomarkers = [
@@ -216,9 +217,8 @@ export default function Trends() {
     }
     return "#FBAD37";
   };
-  // values/date are newest-first, status is oldest-first (newest = last element)
-  const getLatestStatus = (obj: any) =>
-    obj?.status?.[obj.status.length - 1] ?? "";
+  // values/date/status are newest-first (index 0 = latest), same as portal overview
+  const getLatestStatus = (obj: any) => obj?.status?.[0] ?? "";
   useEffect(() => {
     Application.getBiomarkersData().then((res) => {
       setMochBiomarkers(res.data.biomarkers);
@@ -226,7 +226,7 @@ export default function Trends() {
   }, []);
   const findMatchingLabel = (obj: any) => {
     const value = parseFloat(obj.values[0]); // latest value (values are newest-first)
-    const status = getLatestStatus(obj); // latest status (status is oldest-first)
+    const status = getLatestStatus(obj); // latest status (status[0] with values[0])
 
     for (const bound of obj.chart_bounds) {
       const low =
@@ -688,6 +688,38 @@ export default function Trends() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {showDetailModal &&
+                    activeTab === "results" &&
+                    Array.isArray(selectedBiomarker.chart_bounds) &&
+                    selectedBiomarker.chart_bounds.length > 0 &&
+                    Array.isArray(selectedBiomarker.values) &&
+                    selectedBiomarker.values.length > 0 && (
+                      <Card className="rounded-2xl border-0 bg-white dark:bg-gray-800/50">
+                        <CardContent className="p-4">
+                          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            Historical Data
+                          </h3>
+                          <div className="relative min-h-[115px] w-full">
+                            <DeferredHistoricalChart
+                              chartId={`mobile-${String(
+                                selectedBiomarker.name || "biomarker",
+                              ).replace(/\s+/g, "-")}`}
+                              statusBar={selectedBiomarker.chart_bounds}
+                              sources={
+                                selectedBiomarker.historical_sources || []
+                              }
+                              dataStatus={selectedBiomarker.status}
+                              dataPoints={[...selectedBiomarker.values]}
+                              labels={[...selectedBiomarker.date]}
+                              unit={selectedBiomarker.unit}
+                              valueType={selectedBiomarker.value_type}
+                              valueKind={selectedBiomarker.value_kind}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
 
                   <Card className="rounded-2xl border-0">
                     <CardContent className="p-4">

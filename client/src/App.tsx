@@ -25,6 +25,7 @@ import Devices from "@/pages/devices";
 import MobileLayout from "@/components/layout/mobile-layout";
 import NotFound from "@/pages/not-found";
 import BootGate from "@/components/BootGate";
+import { LegalPrivacy, LegalTerms } from "@/pages/legal";
 // import { usePushNotifications } from "./hooks/use-pushNotification";
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
@@ -147,6 +148,8 @@ function Router() {
     return (
       <Switch>
         <Route path="/onboarding" component={Onboarding} />
+        <Route path="/privacy" component={LegalPrivacy} />
+        <Route path="/terms" component={LegalTerms} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/" component={AuthPage} />
         <Route component={AuthPage} />
@@ -174,6 +177,8 @@ function Router() {
           {!isAuthenticated ? (
             <Switch>
               <Route path="/onboarding" component={Onboarding} />
+              <Route path="/privacy" component={LegalPrivacy} />
+              <Route path="/terms" component={LegalTerms} />
               <Route path="/auth" component={AuthPage} />
               <Route path="/" component={AuthPage} />
               <Route component={AuthPage} />
@@ -189,6 +194,8 @@ function Router() {
                   <Route path="/chat" component={ChatPage} />
                   <Route path="/educational" component={EducationalPage} />
                   <Route path="/profile" component={Profile} />
+                  <Route path="/privacy" component={LegalPrivacy} />
+                  <Route path="/terms" component={LegalTerms} />
                   <Route path="/devices" component={Devices} />
                   <Route path="/plan" component={PlanPage} />
                   <Route path="/action-plan" component={ActionPlanPage} />

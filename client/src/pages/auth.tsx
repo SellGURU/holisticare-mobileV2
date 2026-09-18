@@ -41,7 +41,10 @@ import { useEffect, useRef, useState } from "react";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import { useLocation } from "wouter";
-import { openExternalUrl } from "@/lib/open-external-url";
+import {
+  PATIENT_PRIVACY_PATH,
+  PATIENT_TERMS_PATH,
+} from "@/lib/legalUrls";
 // import logoImage from "@assets/logo.png";
 
 interface RegisterData {
@@ -344,6 +347,11 @@ export default function AuthPage() {
   } | null>(null);
   const [sessionData, setSessionData] = useState<any>(null);
   const setLocalStorageData = (data: any) => {
+    try {
+      sessionStorage.removeItem("hc_mobile_refresh_attempted");
+    } catch {
+      // Ignore quota / private-mode failures.
+    }
     localStorage.setItem("health_session", data.access_token);
     localStorage.setItem("token", data.access_token);
     localStorage.setItem("encoded_mi", data.encoded_mi);
@@ -485,18 +493,19 @@ export default function AuthPage() {
       })
       .catch((res) => {
         if (isRegister) {
-          // Account was created; let the user sign in manually with the same email.
-          setLoginData({
-            email: data.email,
-            password: data.password,
-          });
-          setCurrentTab("login");
-          setRegisterStep(1);
-          toast({
-            title: "Account created",
-            description:
-              "Please sign in with the email and password you just registered.",
-          });
+          const detail = Array.isArray(res?.response?.data?.detail)
+            ? String(res.response.data.detail[0] ?? "")
+            : String(
+                res?.response?.data?.detail ||
+                  "This email is already registered in our system.",
+              );
+          setErrorsRegister((prev) => ({
+            ...prev,
+            email: detail.includes("already")
+              ? "This email is already registered in our system."
+              : detail,
+          }));
+          return;
         }
 
         if (res.response?.data?.detail) {
@@ -551,60 +560,52 @@ export default function AuthPage() {
         });
       })
       .catch((res) => {
+        const rawDetail = res?.response?.data?.detail;
+        const detail = Array.isArray(rawDetail)
+          ? String(rawDetail[0] ?? "")
+          : String(rawDetail || "Could not create account.");
+        const lower = detail.toLowerCase();
         if (
-          res.response.data.detail.includes("email") ||
-          res.response.data.detail.includes("Email")
+          lower.includes("email") ||
+          lower.includes("already registered") ||
+          lower.includes("already in use")
         ) {
-          setErrorsRegister({
-            ...errorsRegister,
-            email: res.response.data.detail,
-          });
-        } else if (
-          res.response.data.detail.includes("password") ||
-          res.response.data.detail.includes("Password")
-        ) {
-          setErrorsRegister({
-            ...errorsRegister,
-            password: res.response.data.detail,
-          });
-        } else if (
-          res.response.data.detail == "Client must be at least 18 years old."
-        ) {
+          setErrorsRegister((prev) => ({
+            ...prev,
+            email: detail,
+          }));
+        } else if (lower.includes("password")) {
+          setErrorsRegister((prev) => ({
+            ...prev,
+            password: detail,
+          }));
+        } else if (detail === "Client must be at least 18 years old.") {
           setRegisterStep(1);
-          setErrorsRegister({
-            ...errorsRegister,
-            dateOfBirth: res.response.data.detail,
-          });
-        } else if (
-          res.response.data.detail.includes("first_name") ||
-          res.response.data.detail.includes("First Name")
-        ) {
-          setErrorsRegister({
-            ...errorsRegister,
-            firstName: res.response.data.detail,
-          });
-        } else if (
-          res.response.data.detail.includes("last_name") ||
-          res.response.data.detail.includes("Last Name")
-        ) {
-          setErrorsRegister({
-            ...errorsRegister,
-            lastName: res.response.data.detail,
-          });
-        } else if (
-          res.response.data.detail.includes("phone_number") ||
-          res.response.data.detail.includes("phone number")
-        ) {
+          setErrorsRegister((prev) => ({
+            ...prev,
+            dateOfBirth: detail,
+          }));
+        } else if (lower.includes("first_name") || lower.includes("first name")) {
+          setErrorsRegister((prev) => ({
+            ...prev,
+            firstName: detail,
+          }));
+        } else if (lower.includes("last_name") || lower.includes("last name")) {
+          setErrorsRegister((prev) => ({
+            ...prev,
+            lastName: detail,
+          }));
+        } else if (lower.includes("phone")) {
           setRegisterStep(2);
-          setErrorsRegister({
-            ...errorsRegister,
-            phone: res.response.data.detail,
-          });
+          setErrorsRegister((prev) => ({
+            ...prev,
+            phone: detail,
+          }));
         } else {
-          setErrorsRegister({
-            ...errorsRegister,
-            email: res.response.data.detail,
-          });
+          setErrorsRegister((prev) => ({
+            ...prev,
+            email: detail,
+          }));
         }
       })
       .finally(() => {
@@ -658,54 +659,20 @@ export default function AuthPage() {
   };
 
   const handleRegisterStepOne = () => {
+    const requiredMessage = "This field is required.";
+    const nextErrors = {
+      ...errorsRegister,
+      firstName: registerData.firstName.trim() ? "" : requiredMessage,
+      lastName: registerData.lastName.trim() ? "" : requiredMessage,
+      gender: registerData.gender.trim() ? "" : requiredMessage,
+      dateOfBirth: registerData.dateOfBirth ? "" : requiredMessage,
+    };
+    setErrorsRegister(nextErrors);
     if (
-      registerData.firstName.trim() === "" ||
-      registerData.lastName.trim() === "" ||
-      registerData.gender.trim() === "" ||
-      registerData.dateOfBirth === null
-    ) {
-      setErrorsRegister({
-        ...errorsRegister,
-        firstName: "This field is required.",
-        lastName: "This field is required.",
-        gender: "This field is required.",
-        dateOfBirth: "This field is required.",
-      });
-      return;
-    }
-    if (!registerData.firstName || registerData.firstName.trim() === "") {
-      setErrorsRegister({
-        ...errorsRegister,
-        firstName: "This field is required.",
-      });
-      return;
-    }
-    if (!registerData.lastName || registerData.lastName.trim() === "") {
-      setErrorsRegister({
-        ...errorsRegister,
-        lastName: "This field is required.",
-      });
-      return;
-    }
-    if (!registerData.gender || registerData.gender.trim() === "") {
-      setErrorsRegister({
-        ...errorsRegister,
-        gender: "This field is required.",
-      });
-      return;
-    }
-    if (!registerData.dateOfBirth || registerData.dateOfBirth === null) {
-      setErrorsRegister({
-        ...errorsRegister,
-        dateOfBirth: "This field is required.",
-      });
-      return;
-    }
-    if (
-      errorsRegister.dateOfBirth ||
-      errorsRegister.firstName ||
-      errorsRegister.lastName ||
-      errorsRegister.gender
+      nextErrors.firstName ||
+      nextErrors.lastName ||
+      nextErrors.gender ||
+      nextErrors.dateOfBirth
     ) {
       return;
     }
@@ -1530,9 +1497,7 @@ export default function AuthPage() {
                                 I accept the{" "}
                                 <div
                                   onClick={() => {
-                                    void openExternalUrl(
-                                      "https://holisticare.io/legal/patients-privacy-policy/",
-                                    );
+                                    navigate(PATIENT_PRIVACY_PATH);
                                   }}
                                   // href="https://holisticare.io/legal/patients-privacy-policy/"
                                   style={{
@@ -1545,9 +1510,7 @@ export default function AuthPage() {
                                 and{" "}
                                 <div
                                   onClick={() => {
-                                    void openExternalUrl(
-                                      "https://holisticare.io/legal/patients-terms-of-service/",
-                                    );
+                                    navigate(PATIENT_TERMS_PATH);
                                   }}
                                   // href="https://holisticare.io/legal/patients-terms-of-service/"
                                   style={{
