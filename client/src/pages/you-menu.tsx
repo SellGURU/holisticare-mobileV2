@@ -305,6 +305,19 @@ export default function YouMenu() {
     return "";
   };
 
+  const loadReportFile = async (url: string, asBlob: boolean) => {
+    try {
+      const next = await fetch(url);
+      if (next.ok) {
+        return asBlob ? await next.blob() : await next.text();
+      }
+    } catch {
+      // Cross-origin fetch can fail; retry through the same API client.
+    }
+    const res = await Application.fetchPublicReport(url, asBlob ? "blob" : "text");
+    return res.data;
+  };
+
   const isMountedRef = useRef(true);
   useEffect(() => {
     isMountedRef.current = true;
@@ -758,60 +771,28 @@ export default function YouMenu() {
         typeof window !== "undefined" &&
         isPrivateHttpUrl(`http://${window.location.hostname}`);
 
-      let response: Response | null = null;
+      let blob: Blob | null = null;
       for (const url of [pdfUrl, fallbackPdfUrl]) {
         if (!url) continue;
         if (isPrivateHttpUrl(url) && !pageIsPrivate) continue;
         try {
-          const next = await fetch(url);
-          if (next.ok) {
-            response = next;
+          const loaded = await loadReportFile(url, true);
+          if (loaded instanceof Blob && loaded.size > 0) {
+            blob = loaded;
             break;
           }
         } catch {
           // Signed Azure URLs can fail in the browser; try the API copy next.
         }
       }
-      if (!response) {
+      if (!blob) {
         throw new Error("Failed to fetch the PDF report.");
       }
-
-      const blob = await response.blob();
       const pdfBlob =
         blob.type && blob.type !== "application/octet-stream"
           ? blob
           : new Blob([blob], { type: "application/pdf" });
       const fileName = "HolisticPlanReport.pdf";
-
-      // Share sheet only on the native app. In the desktop/mobile browser it
-      // swallows the click (or looks like nothing happened) instead of saving.
-      if (Capacitor.isNativePlatform()) {
-        const file = new File([pdfBlob], fileName, { type: "application/pdf" });
-        if (
-          typeof navigator !== "undefined" &&
-          typeof navigator.share === "function" &&
-          (!navigator.canShare || navigator.canShare({ files: [file] }))
-        ) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: "Holistic Plan Report",
-            });
-            return;
-          } catch (shareError: any) {
-            if (shareError?.name === "AbortError") return;
-          }
-        }
-        const opened = window.open(pdfUrl, "_blank");
-        if (!opened) {
-          throw new Error("Popup blocked while opening the PDF.");
-        }
-        toast({
-          title: "PDF opened",
-          description: "Use the browser/share menu to save the report to your device.",
-        });
-        return;
-      }
 
       const objectUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -878,12 +859,7 @@ export default function YouMenu() {
         throw new Error("HTML report is not available yet.");
       }
 
-      const response = await fetch(htmlUrl);
-      if (!response.ok) {
-        throw new Error("Failed to load the HTML report.");
-      }
-
-      const rawHtml = await response.text();
+      const rawHtml = String(await loadReportFile(htmlUrl, false) || "");
       if (!rawHtml.trim()) {
         throw new Error("Report content is empty.");
       }

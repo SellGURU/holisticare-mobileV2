@@ -69,6 +69,16 @@ class Api {
     return response;
   }
 
+  protected static getAnonymous(url: string, config?: any) {
+    return axios.get(url, {
+      responseType: config?.responseType || "text",
+      timeout: config?.timeout ?? 120000,
+      headers: {
+        Accept: config?.headers?.Accept || "*/*",
+      },
+    });
+  }
+
   protected static getCheck(value: string) {
     const response = axios.get(value, {
       method: "GET",

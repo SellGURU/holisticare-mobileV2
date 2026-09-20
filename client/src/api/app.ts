@@ -159,6 +159,16 @@ class Application extends Api {
     return response;
   }
 
+  static fetchPublicReport(url: string, responseType: "blob" | "text" = "text") {
+    return this.getAnonymous(url, {
+      responseType,
+      timeout: 120000,
+      headers: {
+        Accept: responseType === "blob" ? "application/pdf,*/*" : "text/html,*/*",
+      },
+    });
+  }
+
   static forgetPasswordSendVerification(email: string) {
     const response = this.post("/mobile/auth/forget_password/send_verification", {
       email: email
