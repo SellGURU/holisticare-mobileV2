@@ -296,6 +296,15 @@ export default function YouMenu() {
   const isValidReportUrl = (url: unknown): url is string =>
     typeof url === "string" && url.trim().length > 0;
 
+  const firstReportUrl = (...candidates: unknown[]) => {
+    for (const candidate of candidates) {
+      if (isValidReportUrl(candidate)) {
+        return resolveMobileReportUrl(candidate.trim());
+      }
+    }
+    return "";
+  };
+
   const isMountedRef = useRef(true);
   useEffect(() => {
     isMountedRef.current = true;
@@ -309,15 +318,12 @@ export default function YouMenu() {
     try {
       const res = await Application.getHtmlReport();
       if (!isMountedRef.current) return;
-        const html = res?.data?.html;
-        const pdf = res?.data?.pdf;
+        const html = firstReportUrl(res?.data?.html, res?.data?.html_proxy, res?.data?.html_sas);
+        const pdf = firstReportUrl(res?.data?.pdf, res?.data?.pdf_proxy, res?.data?.pdf_sas);
         // Only treat as available when both usable URLs exist (API can 200 with empty links)
-        if (isValidReportUrl(html) && isValidReportUrl(pdf)) {
+        if (html && pdf) {
           setHasHtmlReport(true);
-          setHtmlReportUrls({
-            html: resolveMobileReportUrl(html.trim()),
-            pdf: resolveMobileReportUrl(pdf.trim()),
-          });
+          setHtmlReportUrls({ html, pdf });
       } else {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
@@ -726,10 +732,11 @@ export default function YouMenu() {
     setLoadingHtmlReport(true);
     try {
       const res = await Application.getHtmlReport();
-      const pdfUrl = resolveMobileReportUrl(
-        (isValidReportUrl(res?.data?.pdf) && res.data.pdf.trim()) ||
-          htmlReportUrls?.pdf ||
-          ""
+      const pdfUrl = firstReportUrl(
+        res?.data?.pdf,
+        res?.data?.pdf_proxy,
+        htmlReportUrls?.pdf,
+        res?.data?.pdf_sas,
       );
       if (!pdfUrl) {
         setHasHtmlReport(false);
@@ -737,12 +744,13 @@ export default function YouMenu() {
         throw new Error("PDF report is not available yet.");
       }
 
-      const htmlUrl = resolveMobileReportUrl(
-        (isValidReportUrl(res?.data?.html) && res.data.html.trim()) ||
-          htmlReportUrls?.html ||
-          ""
+      const htmlUrl = firstReportUrl(
+        res?.data?.html,
+        res?.data?.html_proxy,
+        htmlReportUrls?.html,
+        res?.data?.html_sas,
       );
-      const fallbackPdfUrl = htmlUrl
+      const fallbackPdfUrl = htmlUrl.includes("/mobile/html_report/html")
         ? htmlUrl.replace(/\/html(\?|$)/, "/pdf$1")
         : "";
 
@@ -849,13 +857,13 @@ export default function YouMenu() {
 
     setLoadingViewHtmlReport(true);
     try {
-      let htmlUrl = htmlReportUrls?.html
-        ? resolveMobileReportUrl(htmlReportUrls.html)
-        : "";
+      let htmlUrl = firstReportUrl(htmlReportUrls?.html);
       if (!htmlUrl) {
         const res = await Application.getHtmlReport();
-        htmlUrl = resolveMobileReportUrl(
-          (isValidReportUrl(res?.data?.html) && res.data.html.trim()) || ""
+        htmlUrl = firstReportUrl(
+          res?.data?.html,
+          res?.data?.html_proxy,
+          res?.data?.html_sas,
         );
       }
       if (!htmlUrl) {
