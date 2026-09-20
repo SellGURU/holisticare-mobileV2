@@ -40,6 +40,34 @@ const resolveBaseEndPoint = () => {
   }
   return baseProductEndPoint;
 };
+
+function isPrivateHttpUrl(url: string) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return isLocalDevHost(host);
+  } catch {
+    return false;
+  }
+}
+
+/** Point /mobile/html_report/* links at this app's API, never a LAN IP from the backend env. */
+const resolveMobileReportUrl = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.pathname.includes("/mobile/html_report/")) {
+      return url;
+    }
+    const pageIsLocal =
+      typeof window !== "undefined" && isLocalDevHost(window.location.hostname);
+    if (pageIsLocal && isLocalDevHost(parsed.hostname)) {
+      return url;
+    }
+    const apiBase = resolveBaseEndPoint().replace(/\/$/, "");
+    return `${apiBase}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+};
 const resolveBaseUrl = () => {
   if (env === "test") {
     return baseTestUrl;
@@ -58,4 +86,4 @@ const getRookCredentials = (): { clientUUID: string; password: string } | undefi
   return undefined;
 };
 
-export { resolveBaseEndPoint, resolveBaseUrl, env, getRookProxyBase, getRookCredentials };
+export { resolveBaseEndPoint, resolveBaseUrl, resolveMobileReportUrl, isPrivateHttpUrl, env, getRookProxyBase, getRookCredentials };

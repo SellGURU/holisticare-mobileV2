@@ -1,5 +1,5 @@
 import Application from "@/api/app";
-import { resolveBaseUrl } from "@/api/base";
+import { isPrivateHttpUrl, resolveBaseUrl, resolveMobileReportUrl } from "@/api/base";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -309,12 +309,15 @@ export default function YouMenu() {
     try {
       const res = await Application.getHtmlReport();
       if (!isMountedRef.current) return;
-      const html = res?.data?.html;
-      const pdf = res?.data?.pdf;
-      // Only treat as available when both usable URLs exist (API can 200 with empty links)
-      if (isValidReportUrl(html) && isValidReportUrl(pdf)) {
-        setHasHtmlReport(true);
-        setHtmlReportUrls({ html: html.trim(), pdf: pdf.trim() });
+        const html = res?.data?.html;
+        const pdf = res?.data?.pdf;
+        // Only treat as available when both usable URLs exist (API can 200 with empty links)
+        if (isValidReportUrl(html) && isValidReportUrl(pdf)) {
+          setHasHtmlReport(true);
+          setHtmlReportUrls({
+            html: resolveMobileReportUrl(html.trim()),
+            pdf: resolveMobileReportUrl(pdf.trim()),
+          });
       } else {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
@@ -723,25 +726,34 @@ export default function YouMenu() {
     setLoadingHtmlReport(true);
     try {
       const res = await Application.getHtmlReport();
-      const pdfUrl =
+      const pdfUrl = resolveMobileReportUrl(
         (isValidReportUrl(res?.data?.pdf) && res.data.pdf.trim()) ||
-        htmlReportUrls?.pdf;
+          htmlReportUrls?.pdf ||
+          ""
+      );
       if (!pdfUrl) {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
         throw new Error("PDF report is not available yet.");
       }
 
-      const htmlUrl =
+      const htmlUrl = resolveMobileReportUrl(
         (isValidReportUrl(res?.data?.html) && res.data.html.trim()) ||
-        htmlReportUrls?.html;
-      const fallbackPdfUrl = isValidReportUrl(htmlUrl)
+          htmlReportUrls?.html ||
+          ""
+      );
+      const fallbackPdfUrl = htmlUrl
         ? htmlUrl.replace(/\/html(\?|$)/, "/pdf$1")
-        : null;
+        : "";
+
+      const pageIsPrivate =
+        typeof window !== "undefined" &&
+        isPrivateHttpUrl(`http://${window.location.hostname}`);
 
       let response: Response | null = null;
       for (const url of [pdfUrl, fallbackPdfUrl]) {
         if (!url) continue;
+        if (isPrivateHttpUrl(url) && !pageIsPrivate) continue;
         try {
           const next = await fetch(url);
           if (next.ok) {
@@ -838,12 +850,20 @@ export default function YouMenu() {
     setLoadingViewHtmlReport(true);
     try {
       const res = await Application.getHtmlReport();
-      const htmlUrl =
+      const htmlUrl = resolveMobileReportUrl(
         (isValidReportUrl(res?.data?.html) && res.data.html.trim()) ||
-        htmlReportUrls?.html;
+          htmlReportUrls?.html ||
+          ""
+      );
       if (!htmlUrl) {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
+        throw new Error("HTML report is not available yet.");
+      }
+      const pageIsPrivate =
+        typeof window !== "undefined" &&
+        isPrivateHttpUrl(`http://${window.location.hostname}`);
+      if (isPrivateHttpUrl(htmlUrl) && !pageIsPrivate) {
         throw new Error("HTML report is not available yet.");
       }
 
