@@ -21,7 +21,6 @@ import {
   Circle,
   ClipboardList,
   Dumbbell,
-  Loader2,
   Pill,
   Syringe,
   Target,
@@ -131,7 +130,6 @@ export default function Plan() {
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [todaysTasks, setTodaysTasks] = useState<Task[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [loadingTaskDetails, setLoadingTaskDetails] = useState(false);
   const [selectData, setSelectData] = useState<Exercise | null>(null);
   const [videoData, setVideoData] = useState<FileData[]>([]);
   const [selectIndexTitle, setSelectIndexTitle] = useState<{
@@ -493,25 +491,10 @@ export default function Plan() {
 
   const clientNotes = (task: Task) => asStringList(task.Client_Notes);
 
-  const openTaskDetails = async (task: Task) => {
+  const openTaskDetails = (task: Task) => {
+    // List payloads already include the client-facing fields; skip a second
+    // round-trip so opening a card stays instant.
     setSelectedTask(task);
-    if (!task.task_id || !encodedMi) return;
-    setLoadingTaskDetails(true);
-    try {
-      const res = await Application.getTaskDetails({
-        encoded_mi: encodedMi,
-        task_id: task.task_id,
-      });
-      if (res?.data) {
-        setSelectedTask((current) =>
-          current?.task_id === task.task_id ? { ...current, ...res.data } : current
-        );
-      }
-    } catch {
-      // Keep the list payload if the details call fails.
-    } finally {
-      setLoadingTaskDetails(false);
-    }
   };
 
   const renderTaskMeta = (task: Task) => {
@@ -1505,13 +1488,6 @@ export default function Plan() {
                   </div>
                 </SheetDescription>
               </SheetHeader>
-
-              {loadingTaskDetails && (
-                <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading details
-                </div>
-              )}
 
               <div className="mt-5 space-y-4">
                 {renderDetailSection("How to do it", selectedTask.Instruction)}

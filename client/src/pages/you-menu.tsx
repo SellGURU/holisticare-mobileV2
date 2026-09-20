@@ -304,8 +304,8 @@ export default function YouMenu() {
     };
   }, []);
 
-  const refreshHtmlReport = async () => {
-    setCheckingHtmlReport(true);
+  const refreshHtmlReport = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setCheckingHtmlReport(true);
     try {
       const res = await Application.getHtmlReport();
       if (!isMountedRef.current) return;
@@ -486,7 +486,7 @@ export default function YouMenu() {
     };
     const handleHealthReportUpdated = () => {
       handleGetHolisticPlanActionPlan();
-      void refreshHtmlReport();
+      void refreshHtmlReport({ silent: true });
     };
 
     subscribe("openHealthReport", handleOpenHealthReport);
@@ -849,12 +849,15 @@ export default function YouMenu() {
 
     setLoadingViewHtmlReport(true);
     try {
-      const res = await Application.getHtmlReport();
-      const htmlUrl = resolveMobileReportUrl(
-        (isValidReportUrl(res?.data?.html) && res.data.html.trim()) ||
-          htmlReportUrls?.html ||
-          ""
-      );
+      let htmlUrl = htmlReportUrls?.html
+        ? resolveMobileReportUrl(htmlReportUrls.html)
+        : "";
+      if (!htmlUrl) {
+        const res = await Application.getHtmlReport();
+        htmlUrl = resolveMobileReportUrl(
+          (isValidReportUrl(res?.data?.html) && res.data.html.trim()) || ""
+        );
+      }
       if (!htmlUrl) {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
@@ -877,10 +880,13 @@ export default function YouMenu() {
         throw new Error("Report content is empty.");
       }
 
-      const patientSafeHtml = rewriteHolisticPlanResourceLinks(
-        sanitizeWellnessReportDisclaimer(rawHtml),
-      );
       const isSanitizedProxy = htmlUrl.includes("/mobile/html_report/html");
+      // Proxy already ran branding + disclaimer + link rewrite server-side.
+      const patientSafeHtml = isSanitizedProxy
+        ? rawHtml
+        : rewriteHolisticPlanResourceLinks(
+            sanitizeWellnessReportDisclaimer(rawHtml),
+          );
       setHtmlReportDoc(
         isSanitizedProxy ? patientSafeHtml : withBaseHref(patientSafeHtml, htmlUrl),
       );
