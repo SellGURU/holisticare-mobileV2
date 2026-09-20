@@ -54,7 +54,8 @@ function isPrivateHttpUrl(url: string) {
 const resolveMobileReportUrl = (url: string) => {
   try {
     const parsed = new URL(url);
-    if (!parsed.pathname.includes("/mobile/html_report/")) {
+    const mobileIndex = parsed.pathname.indexOf("/mobile/html_report/");
+    if (mobileIndex < 0) {
       return url;
     }
     const pageIsLocal =
@@ -63,7 +64,8 @@ const resolveMobileReportUrl = (url: string) => {
       return url;
     }
     const apiBase = resolveBaseEndPoint().replace(/\/$/, "");
-    return `${apiBase}${parsed.pathname}${parsed.search}`;
+    const mobilePath = parsed.pathname.slice(mobileIndex);
+    return `${apiBase}${mobilePath}${parsed.search}`;
   } catch {
     return url;
   }
