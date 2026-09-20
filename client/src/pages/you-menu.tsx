@@ -51,6 +51,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { subscribe, unsubscribe } from "@/lib/event";
 import { useLocation } from "wouter";
 import { openExternalUrl } from "@/lib/open-external-url";
 
@@ -295,36 +296,40 @@ export default function YouMenu() {
   const isValidReportUrl = (url: unknown): url is string =>
     typeof url === "string" && url.trim().length > 0;
 
+  const isMountedRef = useRef(true);
   useEffect(() => {
-    let cancelled = false;
-    setCheckingHtmlReport(true);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-    Application.getHtmlReport()
-      .then((res) => {
-        if (cancelled) return;
-        const html = res?.data?.html;
-        const pdf = res?.data?.pdf;
-        // Only treat as available when both usable URLs exist (API can 200 with empty links)
-        if (isValidReportUrl(html) && isValidReportUrl(pdf)) {
-          setHasHtmlReport(true);
-          setHtmlReportUrls({ html: html.trim(), pdf: pdf.trim() });
-        } else {
-          setHasHtmlReport(false);
-          setHtmlReportUrls(null);
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
+  const refreshHtmlReport = async () => {
+    setCheckingHtmlReport(true);
+    try {
+      const res = await Application.getHtmlReport();
+      if (!isMountedRef.current) return;
+      const html = res?.data?.html;
+      const pdf = res?.data?.pdf;
+      // Only treat as available when both usable URLs exist (API can 200 with empty links)
+      if (isValidReportUrl(html) && isValidReportUrl(pdf)) {
+        setHasHtmlReport(true);
+        setHtmlReportUrls({ html: html.trim(), pdf: pdf.trim() });
+      } else {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
-      })
-      .finally(() => {
-        if (!cancelled) setCheckingHtmlReport(false);
-      });
+      }
+    } catch {
+      if (!isMountedRef.current) return;
+      setHasHtmlReport(false);
+      setHtmlReportUrls(null);
+    } finally {
+      if (isMountedRef.current) setCheckingHtmlReport(false);
+    }
+  };
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    void refreshHtmlReport();
   }, []);
   // const { token, notifications } = usePushNotifications();
   // useEffect(() => {
@@ -455,35 +460,58 @@ export default function YouMenu() {
     syncSummaries();
   }, []);
 
-  // Auto-scroll to download report button when ?downloadReport is in URL
+  const scrollToDeepAnalysis = (delay = 600) => {
+    setTimeout(() => {
+      const element =
+        document.getElementById("download-pdf-report-Box") ??
+        document.getElementById("deep-analysis-section");
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, delay);
+  };
+
+  // Jump to the Deep Analysis card with fresh data (notification tap / deep link)
+  const openDeepAnalysisSection = async () => {
+    setCurrentView("main");
+    handleGetHolisticPlanActionPlan();
+    await refreshHtmlReport();
+    scrollToDeepAnalysis();
+  };
+
+  useEffect(() => {
+    const handleOpenHealthReport = () => {
+      void openDeepAnalysisSection();
+    };
+    const handleHealthReportUpdated = () => {
+      handleGetHolisticPlanActionPlan();
+      void refreshHtmlReport();
+    };
+
+    subscribe("openHealthReport", handleOpenHealthReport);
+    subscribe("healthReportUpdated", handleHealthReportUpdated);
+
+    return () => {
+      unsubscribe("openHealthReport", handleOpenHealthReport);
+      unsubscribe("healthReportUpdated", handleHealthReportUpdated);
+    };
+  }, []);
+
+  // Auto-scroll to the report when ?downloadReport / ?openReport is in the URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("downloadReport") === "true") {
-      // Small delay to ensure the element is rendered
-      setTimeout(() => {
-        const element = document.getElementById("download-pdf-report-Box");
-        if (element) {
-          element.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-        }
-      }, 1000);
+    if (
+      urlParams.get("downloadReport") === "true" ||
+      urlParams.get("openReport") === "1"
+    ) {
+      // Drop the flag so going back to this page later doesn't jump again
+      window.history.replaceState({}, "", window.location.pathname);
+      void openDeepAnalysisSection();
     }
 
     CapacitorApp.addListener("appUrlOpen", (urlOpen: { url: string | URL }) => {
       const url = new URL(urlOpen.url);
       const key = url.searchParams.get("key");
-      if (key === "downloadReport") {
-        setTimeout(() => {
-          const element = document.getElementById("download-pdf-report-Box");
-          if (element) {
-            element.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }
-        }, 1000);
+      if (key === "downloadReport" || key === "openReport") {
+        void openDeepAnalysisSection();
       }
     });
   }, []);
@@ -704,8 +732,27 @@ export default function YouMenu() {
         throw new Error("PDF report is not available yet.");
       }
 
-      const response = await fetch(pdfUrl);
-      if (!response.ok) {
+      const htmlUrl =
+        (isValidReportUrl(res?.data?.html) && res.data.html.trim()) ||
+        htmlReportUrls?.html;
+      const fallbackPdfUrl = isValidReportUrl(htmlUrl)
+        ? htmlUrl.replace(/\/html(\?|$)/, "/pdf$1")
+        : null;
+
+      let response: Response | null = null;
+      for (const url of [pdfUrl, fallbackPdfUrl]) {
+        if (!url) continue;
+        try {
+          const next = await fetch(url);
+          if (next.ok) {
+            response = next;
+            break;
+          }
+        } catch {
+          // Signed Azure URLs can fail in the browser; try the API copy next.
+        }
+      }
+      if (!response) {
         throw new Error("Failed to fetch the PDF report.");
       }
 
@@ -716,27 +763,25 @@ export default function YouMenu() {
           : new Blob([blob], { type: "application/pdf" });
       const fileName = "HolisticPlanReport.pdf";
 
-      // Best path on many phones: system share sheet (Save to Files / Drive / etc.)
-      const file = new File([pdfBlob], fileName, { type: "application/pdf" });
-      if (
-        typeof navigator !== "undefined" &&
-        typeof navigator.share === "function" &&
-        (!navigator.canShare || navigator.canShare({ files: [file] }))
-      ) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: "Holistic Plan Report",
-          });
-          return;
-        } catch (shareError: any) {
-          // User cancelled share — don't treat as hard failure.
-          if (shareError?.name === "AbortError") return;
-        }
-      }
-
-      // Native WebViews often ignore <a download>; open the PDF so the user can save/share it.
+      // Share sheet only on the native app. In the desktop/mobile browser it
+      // swallows the click (or looks like nothing happened) instead of saving.
       if (Capacitor.isNativePlatform()) {
+        const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+        if (
+          typeof navigator !== "undefined" &&
+          typeof navigator.share === "function" &&
+          (!navigator.canShare || navigator.canShare({ files: [file] }))
+        ) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: "Holistic Plan Report",
+            });
+            return;
+          } catch (shareError: any) {
+            if (shareError?.name === "AbortError") return;
+          }
+        }
         const opened = window.open(pdfUrl, "_blank");
         if (!opened) {
           throw new Error("Popup blocked while opening the PDF.");
@@ -748,7 +793,6 @@ export default function YouMenu() {
         return;
       }
 
-      // Desktop / mobile browsers: blob + <a download>
       const objectUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
       link.href = objectUrl;
@@ -1320,7 +1364,10 @@ export default function YouMenu() {
       </Card>
 
       {/* Deep Analysis */}
-      <Card className="overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90">
+      <Card
+        id="deep-analysis-section"
+        className="overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90"
+      >
         <CardContent className="p-4">
           {checkingHtmlReport ? (
             <div className="flex items-center justify-center py-6">

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useAuth } from "@/lib/auth";
+import { useAuth, isPasswordChangeDeferred } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -16,6 +16,7 @@ import {
   TrendingUp,
   CheckCircle,
   ChevronRight,
+  FileText,
 } from "lucide-react";
 import Auth from "@/api/auth";
 import Application from "@/api/app";
@@ -29,7 +30,7 @@ import {
   SheetDescription,
   SheetClose,
 } from "../ui/sheet";
-import { subscribe, unsubscribe } from "@/lib/event";
+import { publish, subscribe, unsubscribe } from "@/lib/event";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 // import logoImage from "@assets/Logo5 2_1753791920091_1757240780580.png";
@@ -62,6 +63,23 @@ type ClientInformation = {
   has_changed_password?: boolean;
 };
 
+const OPEN_HEALTH_REPORT_ACTION = "open_health_report";
+
+// The backend sends `action` now; type/title keep older notifications tappable.
+const resolveNotificationAction = (notification: any): string | null => {
+  if (notification?.action) return String(notification.action);
+  const type = String(notification?.notification_type ?? "")
+    .trim()
+    .toLowerCase();
+  if (type === "report_ready" || type === "html_report_ready") {
+    return OPEN_HEALTH_REPORT_ACTION;
+  }
+  const title = String(notification?.title ?? "")
+    .trim()
+    .toLowerCase();
+  return title === "health report ready" ? OPEN_HEALTH_REPORT_ACTION : null;
+};
+
 const readStored = <T,>(key: string): T | undefined => {
   try {
     const raw = localStorage.getItem(key);
@@ -81,6 +99,8 @@ export default function ProfileHeader() {
   const [hadNotifications, setHadNotifications] = useState(false);
 
   const notificationRef = useRef<HTMLDivElement>(null);
+  const seenReportNotificationsRef = useRef<Set<string>>(new Set());
+  const notificationsLoadedRef = useRef(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [clientInformation, setClientInformation] = useState<
@@ -97,7 +117,7 @@ export default function ProfileHeader() {
           // ignore storage write failures (private mode, quota, etc.)
         }
         // Check if password change is required
-        if (res.data?.has_changed_password === false) {
+        if (res.data?.has_changed_password === false && !isPasswordChangeDeferred()) {
           // Store flag to open password dialog
           localStorage.setItem("requirePasswordChange", "true");
           // Redirect to profile page only if not already there
@@ -209,29 +229,65 @@ export default function ProfileHeader() {
   const fetchNotifications = async () => {
     try {
       const res = await NotificationApi.getNotification();
-      const notifData = res.data.map((n: any) => ({
-        ...n,
-        read_status: n.read_status || false,
-        icon:
-          n.type === "lab_result"
-            ? Activity
-            : n.type === "goal"
-            ? Target
-            : n.type === "insight"
-            ? Brain
-            : n.type === "reminder"
-            ? Calendar
-            : n.type === "trend"
-            ? TrendingUp
-            : Activity,
-        color: n.color || "blue",
-      }));
+      const notifData = res.data.map((n: any) => {
+        const action = resolveNotificationAction(n);
+        return {
+          ...n,
+          action,
+          read_status: n.read_status || false,
+          icon:
+            action === OPEN_HEALTH_REPORT_ACTION
+              ? FileText
+              : n.type === "lab_result"
+              ? Activity
+              : n.type === "goal"
+              ? Target
+              : n.type === "insight"
+              ? Brain
+              : n.type === "reminder"
+              ? Calendar
+              : n.type === "trend"
+              ? TrendingUp
+              : Activity,
+          color:
+            n.color || (action === OPEN_HEALTH_REPORT_ACTION ? "purple" : "blue"),
+        };
+      });
       setNotifications(notifData);
       if (notifData.length > 0) {
         setHadNotifications(true);
       }
+
+      // A report that just landed should show up without a manual refresh.
+      const unseenReport = notifData.some(
+        (n: any) =>
+          n.action === OPEN_HEALTH_REPORT_ACTION &&
+          !seenReportNotificationsRef.current.has(String(n.id))
+      );
+      notifData.forEach((n: any) => {
+        if (n.action === OPEN_HEALTH_REPORT_ACTION) {
+          seenReportNotificationsRef.current.add(String(n.id));
+        }
+      });
+      if (unseenReport && notificationsLoadedRef.current) {
+        publish("healthReportUpdated", {});
+      }
+      notificationsLoadedRef.current = true;
     } catch (err) {
       console.error("Failed to fetch notifications", err);
+    }
+  };
+
+  const openNotification = (notification: any) => {
+    if (!notification.read_status) {
+      markAsRead(notification.id);
+    }
+    if (notification.action !== OPEN_HEALTH_REPORT_ACTION) return;
+    setShowNotifications(false);
+    if (location === "/") {
+      publish("openHealthReport", {});
+    } else {
+      navigate("/?openReport=1");
     }
   };
 
@@ -486,7 +542,7 @@ export default function ProfileHeader() {
                     return (
                       <div
                         key={notification.id}
-                        onClick={() => unread && markAsRead(notification.id)}
+                        onClick={() => openNotification(notification)}
                         style={{
                           animationDelay: `${Math.min(index * 40, 240)}ms`,
                           animationFillMode: "backwards",
@@ -543,6 +599,21 @@ export default function ProfileHeader() {
                             {notification.message}
                           </p>
                           <div className="mt-2 flex items-center gap-2">
+                            {notification.action ===
+                              OPEN_HEALTH_REPORT_ACTION && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openNotification(notification);
+                                }}
+                                className="h-7 rounded-full px-2.5 text-xs text-purple-600 hover:bg-purple-100/70 dark:text-purple-400 dark:hover:bg-purple-900/30"
+                              >
+                                View report
+                                <ChevronRight className="ml-1 h-3 w-3" />
+                              </Button>
+                            )}
                             {unread && (
                               <Button
                                 variant="ghost"

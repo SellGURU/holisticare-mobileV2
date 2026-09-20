@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PushNotifications, Token, PushNotificationSchema, ActionPerformed } from "@capacitor/push-notifications";
 import { Capacitor } from "@capacitor/core";
+import { publish } from "@/lib/event";
 
 export function usePushNotifications() {
   const [token, setToken] = useState<string | null>(null);
@@ -41,11 +42,15 @@ export function usePushNotifications() {
     PushNotifications.addListener("pushNotificationReceived", (notification: PushNotificationSchema) => {
       console.log("Push received:", notification);
       setNotifications(prev => [...prev, notification]);
+      publish("pushNotificationReceived", { data: notification.data ?? {} });
     });
 
     // 5. وقتی روی نوتیف کلیک شد
     PushNotifications.addListener("pushNotificationActionPerformed", (notification: ActionPerformed) => {
       console.log("Notification action performed:", notification.notification);
+      publish("pushNotificationAction", {
+        data: notification.notification?.data ?? {},
+      });
     });
   }, []);
 

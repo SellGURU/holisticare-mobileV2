@@ -19,7 +19,7 @@ import ProfileHeader from "./profile-header";
 import OfflineBanner from "@/components/OfflineBanner";
 import { usePushNotifications } from "@/hooks/use-pushNotification";
 import NotificationApi from "@/api/notification";
-import { publish } from "@/lib/event";
+import { publish, subscribe, unsubscribe } from "@/lib/event";
 import { Capacitor } from "@capacitor/core";
 interface MobileLayoutProps {
   children: ReactNode;
@@ -27,7 +27,7 @@ interface MobileLayoutProps {
 
 export default function MobileLayout({ children }:MobileLayoutProps ) {
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [showSearch, setShowSearch] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,6 +59,33 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
   useEffect(() => {
     getBrandInfo();
   }, []);
+
+  // Push notifications about a finished report open (or refresh) the report card
+  useEffect(() => {
+    const isReportPush = (event: any) =>
+      String(event?.detail?.data?.type ?? "") === "report_ready";
+
+    const handleActionPerformed = (event: any) => {
+      if (!isReportPush(event)) return;
+      if (location === "/") {
+        publish("openHealthReport", {});
+      } else {
+        navigate("/?openReport=1");
+      }
+    };
+    const handleReceived = (event: any) => {
+      if (!isReportPush(event)) return;
+      publish("healthReportUpdated", {});
+    };
+
+    subscribe("pushNotificationAction", handleActionPerformed);
+    subscribe("pushNotificationReceived", handleReceived);
+
+    return () => {
+      unsubscribe("pushNotificationAction", handleActionPerformed);
+      unsubscribe("pushNotificationReceived", handleReceived);
+    };
+  }, [location, navigate]);
 
   // Reset scroll position whenever the route changes so each page starts at top
   useEffect(() => {

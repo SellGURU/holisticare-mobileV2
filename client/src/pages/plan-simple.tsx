@@ -4,20 +4,30 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
   Apple,
   Calendar,
   CheckCircle,
+  ChevronRight,
   Circle,
   ClipboardList,
   Dumbbell,
+  Loader2,
   Pill,
+  Syringe,
   Target,
   Users,
 } from "lucide-react";
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, type ReactNode } from "react";
 
 interface Filters {
   Type: string[];
@@ -65,13 +75,20 @@ interface WeeklyTask {
   tasks: Task[];
 }
 
+interface DoseSchedule {
+  Dose?: string;
+  Title?: string;
+  Frequency_Type?: string;
+  Frequency_Days?: string[];
+}
+
 interface Task {
-  Category: "Activity" | "Supplement" | "Lifestyle" | "Diet";
-  Description: string;
-  Instruction: string;
+  Category?: "Activity" | "Supplement" | "Lifestyle" | "Diet" | "Medical Peptide Therapy" | string;
+  Description?: string;
+  Instruction?: string;
   Sections?: Section[];
-  Task_Type: "Action" | "Checkin";
-  Times: string[];
+  Task_Type: "Action" | "Checkin" | string;
+  Times?: string[];
   Title: string;
   Estimated_time?: string;
   Questions_Count?: number;
@@ -85,6 +102,14 @@ interface Task {
   Total_macros?: { Fats: number; Carbs: number; Protein: number };
   Activity_Location?: string[];
   Activity_Filters?: Filters;
+  Based_On?: string;
+  Client_Notes?: string[];
+  Frequency_Type?: string;
+  Frequency_Dates?: string[];
+  Repeat_Days?: string[];
+  Dose_Schedules?: DoseSchedule[];
+  FDA_Status?: string;
+  fda_status?: string;
 }
 interface FileData {
   Title: string;
@@ -105,6 +130,8 @@ export default function Plan() {
   const [activeTab, setActiveTab] = useState("today");
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [todaysTasks, setTodaysTasks] = useState<Task[]>([]);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [loadingTaskDetails, setLoadingTaskDetails] = useState(false);
   const [selectData, setSelectData] = useState<Exercise | null>(null);
   const [videoData, setVideoData] = useState<FileData[]>([]);
   const [selectIndexTitle, setSelectIndexTitle] = useState<{
@@ -428,6 +455,106 @@ export default function Plan() {
     return Math.round((completed / tasks.length) * 100);
   };
 
+  const asStringList = (value?: string[] | string | null) => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item).trim()).filter(Boolean);
+    }
+    const text = String(value).trim();
+    return text ? [text] : [];
+  };
+
+  const formatDayList = (days?: string[]) => {
+    if (!days?.length) return "";
+    return days
+      .map((day) =>
+        day.length <= 3
+          ? day.charAt(0).toUpperCase() + day.slice(1).toLowerCase()
+          : day
+      )
+      .join(", ");
+  };
+
+  const formatScheduleLine = (task: Task) => {
+    const frequency = (task.Frequency_Type || "").trim();
+    const days = formatDayList(
+      asStringList(task.Frequency_Dates).length
+        ? asStringList(task.Frequency_Dates)
+        : asStringList(task.Repeat_Days)
+    );
+    if (frequency && days) {
+      return `${frequency.charAt(0).toUpperCase()}${frequency.slice(1)} · ${days}`;
+    }
+    if (frequency) {
+      return frequency.charAt(0).toUpperCase() + frequency.slice(1);
+    }
+    return days;
+  };
+
+  const clientNotes = (task: Task) => asStringList(task.Client_Notes);
+
+  const openTaskDetails = async (task: Task) => {
+    setSelectedTask(task);
+    if (!task.task_id || !encodedMi) return;
+    setLoadingTaskDetails(true);
+    try {
+      const res = await Application.getTaskDetails({
+        encoded_mi: encodedMi,
+        task_id: task.task_id,
+      });
+      if (res?.data) {
+        setSelectedTask((current) =>
+          current?.task_id === task.task_id ? { ...current, ...res.data } : current
+        );
+      }
+    } catch {
+      // Keep the list payload if the details call fails.
+    } finally {
+      setLoadingTaskDetails(false);
+    }
+  };
+
+  const renderTaskMeta = (task: Task) => {
+    const times = asStringList(task.Times);
+    const schedule = formatScheduleLine(task);
+    if (!times.length && !schedule) return null;
+
+    return (
+      <div className="space-y-1.5">
+        {times.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {times.map((time) => (
+              <Badge
+                key={time}
+                variant="outline"
+                className="border-0 bg-slate-100 px-2 py-0.5 text-[10px] font-medium capitalize text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              >
+                {time}
+              </Badge>
+            ))}
+          </div>
+        )}
+        {schedule && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">{schedule}</p>
+        )}
+      </div>
+    );
+  };
+
+  const renderDetailSection = (label: string, value?: ReactNode) => {
+    if (value == null || value === "") return null;
+    return (
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          {label}
+        </p>
+        <div className="mt-1 text-sm leading-relaxed text-gray-800 dark:text-gray-200">
+          {value}
+        </div>
+      </div>
+    );
+  };
+
   const getTaskIcon = (task: Task) => {
     switch (task.Category) {
       case "Diet":
@@ -438,14 +565,14 @@ export default function Plan() {
         return Users;
       case "Activity":
         return Dumbbell;
-      // case "Test":
-      //   return ClipboardList;
+      case "Medical Peptide Therapy":
+        return Syringe;
       default:
         return ClipboardList;
     }
   };
 
-  const getCategoryColor = (category: string) => {
+  const getCategoryColor = (category?: string) => {
     switch (category) {
       case "Diet":
         return "bg-emerald-500";
@@ -457,12 +584,14 @@ export default function Plan() {
         return "bg-orange-500";
       case "Test":
         return "bg-pink-500";
+      case "Medical Peptide Therapy":
+        return "bg-teal-500";
       default:
         return "bg-gray-500";
     }
   };
 
-  const getCategoryBadgeClass = (category: string) => {
+  const getCategoryBadgeClass = (category?: string) => {
     switch (category) {
       case "Diet":
         return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
@@ -474,6 +603,8 @@ export default function Plan() {
         return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300";
       case "Test":
         return "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300";
+      case "Medical Peptide Therapy":
+        return "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300";
       default:
         return "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400";
     }
@@ -495,6 +626,65 @@ export default function Plan() {
   };
 
   const renderTaskDetails = (task: Task, isCurrentDay: boolean) => {
+    if (task.Task_Type === "Checkin") {
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-4 text-sm">
+            {task.Questions_Count && (
+              <div className="flex items-center gap-1">
+                <span className="font-medium text-pink-600 dark:text-pink-400">
+                  Questions:
+                </span>
+                <span className="text-gray-700 dark:text-gray-300">
+                  {task.Questions_Count}
+                </span>
+              </div>
+            )}
+            {task.Estimated_time && (
+              <div className="flex items-center gap-1">
+                <span className="font-medium text-pink-600 dark:text-pink-400">
+                  Time:
+                </span>
+                <span className="text-gray-700 dark:text-gray-300">
+                  {task.Estimated_time}
+                </span>
+              </div>
+            )}
+          </div>
+          {renderTaskMeta(task)}
+          <Button
+            variant={task.Status ? "default" : "outline"}
+            size="sm"
+            disabled={task.Status || !isCurrentDay}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleUpdateTaskStatus(task.task_id, true);
+              if (!task.Status) {
+                handleCheckTask(task.task_id);
+              }
+              const url = `${resolveBaseUrl()}/checkin/${encodedMi}/${task.task_id}`;
+              const newWindow = window.open(url, "_blank");
+              if (newWindow) {
+                setOpenedWindow(newWindow);
+              }
+            }}
+            className={`h-11 w-full rounded-xl text-sm font-medium !mt-4 !-mb-6 ${
+              task.Status
+                ? "bg-emerald-500 text-white opacity-50"
+                : "hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+            }`}
+          >
+            {task.Status ? (
+              <CheckCircle className="w-4 h-4 mr-2" />
+            ) : (
+              <Circle className="w-4 h-4 mr-2" />
+            )}
+            {task.Status ? "Completed" : "Start Check-in"}
+          </Button>
+        </div>
+      );
+    }
+
     switch (task.Category) {
       case "Diet":
         return (
@@ -556,20 +746,23 @@ export default function Plan() {
                 {task.Description}
               </p>
             )}
+            {renderTaskMeta(task)}
           </div>
         );
 
       case "Supplement":
         return (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium text-blue-600 dark:text-blue-400">
-                Dose:
-              </span>
-              <span className="text-gray-700 dark:text-gray-300">
-                {task.Dose}
-              </span>
-            </div>
+            {task.Dose && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-blue-600 dark:text-blue-400">
+                  Dose:
+                </span>
+                <span className="text-gray-700 dark:text-gray-300">
+                  {task.Dose}
+                </span>
+              </div>
+            )}
             <p className="text-sm text-gray-600 dark:text-gray-400 text-justify">
               {task.Instruction}
             </p>
@@ -578,6 +771,7 @@ export default function Plan() {
                 {task.Description}
               </p>
             )}
+            {renderTaskMeta(task)}
           </div>
         );
 
@@ -594,6 +788,7 @@ export default function Plan() {
                     type="number"
                     placeholder={`Enter ${task.Unit || "value"}`}
                     value={taskValues[task.task_id] || ""}
+                    onClick={(event) => event.stopPropagation()}
                     onChange={(e) =>
                       updateTaskValue(
                         task.task_id,
@@ -622,6 +817,7 @@ export default function Plan() {
                 {task.Description}
               </p>
             )}
+            {renderTaskMeta(task)}
           </div>
         );
 
@@ -670,7 +866,8 @@ export default function Plan() {
                             </div>
                             {exercise.Files && exercise.Files.length > 0 && (
                               <div
-                                onClick={() => {
+                                onClick={(event) => {
+                                  event.stopPropagation();
                                   if (
                                     selectIndexTitle.id === exercise.task_id
                                   ) {
@@ -768,7 +965,8 @@ export default function Plan() {
                               variant={completed ? "default" : "outline"}
                               size="sm"
                               disabled={!isCurrentDay}
-                              onClick={() => {
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 if (isCurrentDay) {
                                   if (activeTab === "today") {
                                     handleUpdateExerciseTaskStatus(
@@ -825,69 +1023,79 @@ export default function Plan() {
                 {task.Description}
               </p>
             )}
+            {renderTaskMeta(task)}
           </div>
         );
 
-      // case "Test":
-      //   return ClipboardList;
+      case "Medical Peptide Therapy":
+        return (
+          <div className="space-y-3">
+            {(task.FDA_Status || task.fda_status) && (
+              <Badge
+                variant="outline"
+                className="border-0 bg-teal-100 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
+              >
+                {task.FDA_Status || task.fda_status}
+              </Badge>
+            )}
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-justify">
+              {task.Instruction}
+            </p>
+            {task.Dose_Schedules && task.Dose_Schedules.length > 0 && (
+              <div className="space-y-2">
+                {task.Dose_Schedules.map((schedule, index) => {
+                  const days = formatDayList(schedule.Frequency_Days);
+                  const frequency = (schedule.Frequency_Type || "").trim();
+                  return (
+                    <div
+                      key={`${schedule.Title || "dose"}-${index}`}
+                      className="rounded-xl bg-teal-50/80 p-3 dark:bg-teal-900/20"
+                    >
+                      {schedule.Title && (
+                        <p className="text-xs font-semibold text-teal-800 dark:text-teal-300">
+                          {schedule.Title}
+                        </p>
+                      )}
+                      {schedule.Dose && (
+                        <p className="mt-0.5 text-sm text-gray-800 dark:text-gray-200">
+                          {schedule.Dose}
+                        </p>
+                      )}
+                      {(frequency || days) && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {[frequency, days].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {task.Description && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                {task.Description}
+              </p>
+            )}
+            {renderTaskMeta(task)}
+          </div>
+        );
+
       default:
         return (
           <div className="space-y-2">
-            <div className="flex items-center gap-4 text-sm">
-              {task.Questions_Count && (
-                <div className="flex items-center gap-1">
-                  <span className="font-medium text-pink-600 dark:text-pink-400">
-                    Questions:
-                  </span>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    {task.Questions_Count}
-                  </span>
-                </div>
-              )}
-              {task.Estimated_time && (
-                <div className="flex items-center gap-1">
-                  <span className="font-medium text-pink-600 dark:text-pink-400">
-                    Time:
-                  </span>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    {task.Estimated_time}
-                  </span>
-                </div>
-              )}
-            </div>
-            <Button
-              variant={task.Status ? "default" : "outline"}
-              size="sm"
-              disabled={task.Status || !isCurrentDay}
-              onClick={() => {
-                handleUpdateTaskStatus(task.task_id, true);
-                if (!task.Status) {
-                  handleCheckTask(task.task_id);
-                }
-                const url = `${resolveBaseUrl()}/checkin/${encodedMi}/${task.task_id}`;
-                const newWindow = window.open(url, "_blank");
-                if (newWindow) {
-                  setOpenedWindow(newWindow);
-                }
-              }}
-              className={`h-11 w-full rounded-xl text-sm font-medium !mt-4 !-mb-6 ${
-                task.Status
-                  ? "bg-emerald-500 text-white opacity-50"
-                  : "hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-              }`}
-            >
-              {task.Status ? (
-                <CheckCircle className="w-4 h-4 mr-2" />
-              ) : (
-                <Circle className="w-4 h-4 mr-2" />
-              )}
-              {task.Status ? "Completed" : "Start Check-in"}
-            </Button>
+            {task.Instruction && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-justify">
+                {task.Instruction}
+              </p>
+            )}
+            {task.Description && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                {task.Description}
+              </p>
+            )}
+            {renderTaskMeta(task)}
           </div>
         );
-
-      // default:
-      //   return null;
     }
   };
 
@@ -940,7 +1148,16 @@ export default function Plan() {
     return (
       <Card
         key={task.task_id}
-        className={`overflow-hidden rounded-2xl border-0 shadow-md transition-all ${
+        role="button"
+        tabIndex={0}
+        onClick={() => openTaskDetails(task)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openTaskDetails(task);
+          }
+        }}
+        className={`cursor-pointer overflow-hidden rounded-2xl border-0 shadow-md transition-all ${
           completed
             ? "bg-white/70 dark:bg-gray-800/60"
             : "bg-white/95 dark:bg-gray-800/95"
@@ -975,8 +1192,10 @@ export default function Plan() {
                     {task.Category || task.Task_Type}
                   </Badge>
                 </div>
-                {completed && (
+                {completed ? (
                   <CheckCircle className="h-5 w-5 flex-shrink-0 text-emerald-500" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 flex-shrink-0 text-gray-400" />
                 )}
               </div>
 
@@ -986,7 +1205,10 @@ export default function Plan() {
                 <Button
                   variant={completed ? "default" : "outline"}
                   disabled={!isCurrentDay}
-                  onClick={() => handleTaskAction(task, completed, isCurrentDay)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleTaskAction(task, completed, isCurrentDay);
+                  }}
                   className={`h-11 w-full rounded-xl text-sm font-medium ${
                     completed
                       ? "bg-emerald-500 text-white hover:bg-emerald-600"
@@ -1022,6 +1244,9 @@ export default function Plan() {
       </p>
     </div>
   );
+
+  const notes = selectedTask ? clientNotes(selectedTask) : [];
+  const fdaStatus = selectedTask?.FDA_Status || selectedTask?.fda_status;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 pb-8 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20">
@@ -1244,6 +1469,119 @@ export default function Plan() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Sheet
+        open={Boolean(selectedTask)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTask(null);
+        }}
+      >
+        <SheetContent
+          side="bottom"
+          className="max-h-[85vh] overflow-y-auto rounded-t-3xl px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4"
+        >
+          {selectedTask && (
+            <>
+              <SheetHeader className="text-left">
+                <SheetTitle className="pr-8 text-base leading-snug">
+                  {selectedTask.Title}
+                </SheetTitle>
+                <SheetDescription asChild>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={`border-0 px-2 py-0.5 text-[10px] font-medium ${getCategoryBadgeClass(selectedTask.Category)}`}
+                    >
+                      {selectedTask.Category || selectedTask.Task_Type}
+                    </Badge>
+                    {fdaStatus && (
+                      <Badge
+                        variant="outline"
+                        className="border-0 bg-teal-100 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
+                      >
+                        {fdaStatus}
+                      </Badge>
+                    )}
+                  </div>
+                </SheetDescription>
+              </SheetHeader>
+
+              {loadingTaskDetails && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading details
+                </div>
+              )}
+
+              <div className="mt-5 space-y-4">
+                {renderDetailSection("How to do it", selectedTask.Instruction)}
+                {renderDetailSection("About this task", selectedTask.Description)}
+                {selectedTask.Total_macros &&
+                  renderDetailSection(
+                    "Macros",
+                    `${selectedTask.Total_macros.Carbs}g carbs · ${selectedTask.Total_macros.Protein}g protein · ${selectedTask.Total_macros.Fats}g fats`
+                  )}
+                {renderDetailSection("Dose", selectedTask.Dose)}
+                {selectedTask.Value != null &&
+                  renderDetailSection(
+                    "Target",
+                    `${selectedTask.Value} ${selectedTask.Unit || ""}`.trim()
+                  )}
+                {renderDetailSection("Schedule", formatScheduleLine(selectedTask))}
+                {asStringList(selectedTask.Times).length > 0 &&
+                  renderDetailSection(
+                    "Time of day",
+                    asStringList(selectedTask.Times).join(", ")
+                  )}
+                {renderDetailSection("Why this task", selectedTask.Based_On)}
+                {notes.length > 0 &&
+                  renderDetailSection(
+                    "Notes",
+                    <div className="space-y-2">
+                      {notes.map((note) => (
+                        <p key={note}>{note}</p>
+                      ))}
+                    </div>
+                  )}
+                {selectedTask.Dose_Schedules &&
+                  selectedTask.Dose_Schedules.length > 0 &&
+                  renderDetailSection(
+                    "Dose schedule",
+                    <div className="space-y-2">
+                      {selectedTask.Dose_Schedules.map((schedule, index) => (
+                        <div
+                          key={`${schedule.Title || "dose"}-${index}`}
+                          className="rounded-xl bg-teal-50 p-3 dark:bg-teal-900/20"
+                        >
+                          {schedule.Title && (
+                            <p className="text-xs font-semibold text-teal-800 dark:text-teal-300">
+                              {schedule.Title}
+                            </p>
+                          )}
+                          {schedule.Dose && <p>{schedule.Dose}</p>}
+                          <p className="text-xs text-gray-500">
+                            {[
+                              schedule.Frequency_Type,
+                              formatDayList(schedule.Frequency_Days),
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                {selectedTask.Activity_Location &&
+                  selectedTask.Activity_Location.length > 0 &&
+                  renderDetailSection(
+                    "Location",
+                    selectedTask.Activity_Location.join(", ")
+                  )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-message";
 import { UseMutationResult } from "@tanstack/react-query";
 import { Eye, EyeOff, Info, Lock, X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -36,6 +37,7 @@ interface ChangePasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isPasswordChangeRequired: boolean;
+  onDefer?: () => void;
   passwordData: PasswordData;
   setPasswordData: React.Dispatch<React.SetStateAction<PasswordData>>;
   showPasswords: ShowPasswords;
@@ -53,6 +55,7 @@ const ChangePasswordDialog = ({
   open,
   onOpenChange,
   isPasswordChangeRequired,
+  onDefer,
   passwordData,
   setPasswordData,
   showPasswords,
@@ -121,26 +124,21 @@ const ChangePasswordDialog = ({
   return (
     <Sheet
       open={open}
-      onOpenChange={(open) => {
-        // Prevent closing if password change is required
-        if (!open && isPasswordChangeRequired) {
-          toast({
-            title: "Password Change Required",
-            description: "Please change your password before continuing.",
-            variant: "destructive",
-          });
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && isPasswordChangeRequired) {
+          onDefer?.();
           return;
         }
-        onOpenChange(open);
+        onOpenChange(nextOpen);
       }}
     >
       <SheetContent
         side="bottom"
         onInteractOutside={(e) => {
-          if (isPasswordChangeRequired) e.preventDefault();
+          if (isPasswordChangeRequired && !onDefer) e.preventDefault();
         }}
         onEscapeKeyDown={(e) => {
-          if (isPasswordChangeRequired) e.preventDefault();
+          if (isPasswordChangeRequired && !onDefer) e.preventDefault();
         }}
         className="mx-auto flex max-h-[92dvh] w-full max-w-md flex-col gap-0 rounded-t-3xl border-x-0 border-t border-gray-200/50 bg-white/95 p-0 backdrop-blur-xl dark:border-gray-700/50 dark:bg-gray-900/95 [&>button]:hidden"
       >
@@ -165,23 +163,27 @@ const ChangePasswordDialog = ({
                 </SheetDescription>
               </div>
             </div>
-            {!isPasswordChangeRequired && (
-              <SheetClose asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Close"
-                  className="h-8 w-8 flex-shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </SheetClose>
-            )}
+            <SheetClose asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close"
+                className="h-8 w-8 flex-shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                onClick={() => {
+                  if (isPasswordChangeRequired) {
+                    onDefer?.();
+                  }
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </SheetClose>
           </div>
         </SheetHeader>
 
         {/* Form */}
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-2">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 pt-2">
           <div className="space-y-1.5">
             <Label
               htmlFor="currentPassword"
@@ -369,45 +371,67 @@ const ChangePasswordDialog = ({
               <p className="text-xs text-red-500">{errors.confirmPassword}</p>
             )}
           </div>
+        </div>
 
-          <Button
-            onClick={() => {
-              if (passwordData.newPassword !== passwordData.confirmPassword) {
-                setErrors((prev) => ({
-                  ...prev,
-                  confirmPassword: "Passwords do not match",
-                }));
-                return;
-              }
-              Application.varifyPassword({
-                current_password: passwordData.currentPassword,
-                new_password: passwordData.newPassword,
-              })
-                .then((res) => {
-                  if (res.status === 200) {
-                    changePasswordMutation.mutate(passwordData);
-                  } else {
-                    toast({
-                      title: "Invalid password",
-                      description: "Please enter a valid password",
-                    });
-                  }
-                })
-                .catch((err) => {
-                  console.log(err.response.data.detail);
+          <div className="flex flex-shrink-0 flex-col gap-2 border-t border-gray-100 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-3 dark:border-gray-800">
+            <Button
+              onClick={() => {
+                if (passwordData.newPassword !== passwordData.confirmPassword) {
                   setErrors((prev) => ({
-                    newPassword: err.response.data.detail.new_password,
-                    currentPassword: err.response.data.detail.current_password,
+                    ...prev,
+                    confirmPassword: "Passwords do not match",
                   }));
-                });
-            }}
-            disabled={changePasswordMutation.isPending}
-            className="h-11 w-full rounded-xl bg-gradient-to-r from-red-600 to-pink-600 font-medium text-white shadow-lg transition-all hover:from-red-700 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {changePasswordMutation.isPending
-              ? "Changing..."
-              : "Change Password"}
-          </Button>
+                  return;
+                }
+                Application.varifyPassword({
+                  current_password: passwordData.currentPassword,
+                  new_password: passwordData.newPassword,
+                })
+                  .then((res) => {
+                    if (res.status === 200) {
+                      changePasswordMutation.mutate(passwordData);
+                    } else {
+                      toast({
+                        title: "Invalid password",
+                        description: "Please enter a valid password",
+                      });
+                    }
+                  })
+                  .catch((err) => {
+                    const detail = err?.response?.data?.detail;
+                    if (detail && typeof detail === "object") {
+                      setErrors((prev) => ({
+                        ...prev,
+                        newPassword: detail.new_password,
+                        currentPassword: detail.current_password,
+                      }));
+                      return;
+                    }
+                    toast({
+                      title: "Could not verify password",
+                      description: getErrorMessage(err),
+                      variant: "destructive",
+                    });
+                  });
+              }}
+              disabled={changePasswordMutation.isPending}
+              className="h-11 w-full rounded-xl bg-gradient-to-r from-red-600 to-pink-600 font-medium text-white shadow-lg transition-all hover:from-red-700 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {changePasswordMutation.isPending
+                ? "Changing..."
+                : "Change Password"}
+            </Button>
+            {isPasswordChangeRequired && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 w-full rounded-xl text-gray-600 dark:text-gray-300"
+                onClick={() => onDefer?.()}
+              >
+                Later
+              </Button>
+            )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

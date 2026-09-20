@@ -70,6 +70,7 @@ import AccountSetting from "./ProfileComponents/AccountSetting";
 import ChangePasswordDialog from "./ProfileComponents/ChangePasswordDialog";
 import { apiRequest } from "@/lib/queryClient";
 import { secureStorage } from "@/services/secureStorage";
+import { deferPasswordChange, isPasswordChangeDeferred } from "@/lib/auth";
 
 export default function Profile() {
   const { user, logout, fetchClientInformation } = useAuth();
@@ -117,40 +118,41 @@ export default function Profile() {
 
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [passwordChangeDeferred, setPasswordChangeDeferred] = useState(
+    isPasswordChangeDeferred,
+  );
   const [showNotificationsDialog, setShowNotificationsDialog] = useState(false);
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Check if password change is required
-  let isPasswordChangeRequired =
-    clientInformation?.has_changed_password === false;
+  const isPasswordChangeRequired =
+    clientInformation?.has_changed_password === false &&
+    !passwordChangeDeferred;
 
-  // Check if password change is required on mount
-  // useEffect(() => {
-  //   const requirePasswordChange = localStorage.getItem("requirePasswordChange");
-  //   if (requirePasswordChange === "true") {
-  //     setShowPasswordDialog(true);
-  //     localStorage.removeItem("requirePasswordChange");
-  //   }
-  // }, []);
+  const handleDeferPasswordChange = () => {
+    deferPasswordChange();
+    setPasswordChangeDeferred(true);
+    setShowPasswordDialog(false);
+    localStorage.removeItem("requirePasswordChange");
+    setLocation("/");
+  };
+
   useEffect(() => {
-    const requirePasswordChange = localStorage.getItem("requirePasswordChange");
-    if (requirePasswordChange === "true") {
-      setShowPasswordDialog(true);
-      localStorage.removeItem("requirePasswordChange");
+    if (clientInformation == null || passwordChangeDeferred) {
+      return;
     }
-  }, []);
+    if (clientInformation.has_changed_password === false) {
+      setShowPasswordDialog(true);
+    }
+    localStorage.removeItem("requirePasswordChange");
+  }, [clientInformation, passwordChangeDeferred]);
 
-  // Re-open the dialog from real data once client info loads. The localStorage
-  // flag above is one-shot and can be consumed while the post-login
-  // navigation/toast race closes the dialog (clientInformation is still
-  // loading at that point, so the dialog's close-guard is inactive).
   useEffect(() => {
     if (isPasswordChangeRequired && !showPasswordDialog) {
       setShowPasswordDialog(true);
     }
-  }, [isPasswordChangeRequired]);
+  }, [isPasswordChangeRequired, showPasswordDialog]);
 
   // Prevent navigation away if password change is required
   useEffect(() => {
@@ -765,6 +767,7 @@ export default function Profile() {
           open={showPasswordDialog}
           onOpenChange={setShowPasswordDialog}
           isPasswordChangeRequired={isPasswordChangeRequired}
+          onDefer={handleDeferPasswordChange}
           passwordData={passwordData}
           setPasswordData={setPasswordData}
           showPasswords={showPasswords}

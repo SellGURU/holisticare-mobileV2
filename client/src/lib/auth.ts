@@ -48,6 +48,33 @@ export interface RegisterData {
   weight?: number;
 }
 
+const PASSWORD_CHANGE_DEFERRED_KEY = "passwordChangeDeferred";
+
+export function isPasswordChangeDeferred(): boolean {
+  try {
+    return sessionStorage.getItem(PASSWORD_CHANGE_DEFERRED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function deferPasswordChange(): void {
+  try {
+    sessionStorage.setItem(PASSWORD_CHANGE_DEFERRED_KEY, "true");
+    localStorage.removeItem("requirePasswordChange");
+  } catch {
+    // Private mode / storage blocked.
+  }
+}
+
+export function clearPasswordChangeDefer(): void {
+  try {
+    sessionStorage.removeItem(PASSWORD_CHANGE_DEFERRED_KEY);
+  } catch {
+    // Private mode / storage blocked.
+  }
+}
+
 class AuthService {
   private static instance: AuthService;
   private currentUser: AuthUser | null = null;
@@ -103,6 +130,7 @@ class AuthService {
     localStorage.removeItem("health_session");
     localStorage.removeItem("health_session_expires");
     localStorage.removeItem("health_device_connection_state");
+    clearPasswordChangeDefer();
   }
 
   async login(credentials: LoginCredentials): Promise<AuthUser> {
@@ -244,10 +272,10 @@ class AuthService {
   }
 
   needsPasswordChange(): boolean {
-    const needs = this.currentUser?.hasChangedPassword === false;
-    console.log('🔍 needsPasswordChange() called, currentUser:', this.currentUser);
-    console.log('🔍 needsPasswordChange() returning:', needs);
-    return needs;
+    if (isPasswordChangeDeferred()) {
+      return false;
+    }
+    return this.currentUser?.hasChangedPassword === false;
   }
 
   getUser(): AuthUser | null {
@@ -304,5 +332,7 @@ export function useAuth() {
     hasSubscription: authService.hasSubscription.bind(authService),
     fetchClientInformation: authService.fetchClientInformation.bind(authService),
     needsPasswordChange: authService.needsPasswordChange.bind(authService),
+    deferPasswordChange,
+    isPasswordChangeDeferred,
   };
 }

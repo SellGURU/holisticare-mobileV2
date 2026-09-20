@@ -54,6 +54,9 @@ class Application extends Api {
     const response = this.post("/mobile/weekly_tasks", {});
     return response;
   }
+  static getTaskDetails(data: { encoded_mi: string; task_id: string }) {
+    return this.post("/mobile/task_details", data);
+  }
   static getClientInformation() {
     const response = this.post("/client_information_mobile", {});
     return response;
