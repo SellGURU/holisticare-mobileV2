@@ -91,6 +91,7 @@ function Router() {
     }
 
     let isCancelled = false;
+    let appStateListener: { remove: () => void | Promise<void> } | null = null;
 
     const bootstrapRook = async () => {
       try {
@@ -117,15 +118,21 @@ function Router() {
 
     void bootstrapRook();
 
-    const appStateListener = CapacitorApp.addListener("appStateChange", (state) => {
+    void CapacitorApp.addListener("appStateChange", (state) => {
       if (state.isActive) {
         void bootstrapRook();
+      }
+    }).then((handle) => {
+      if (isCancelled) {
+        void handle.remove();
+      } else {
+        appStateListener = handle;
       }
     });
 
     return () => {
       isCancelled = true;
-      appStateListener.remove();
+      void appStateListener?.remove();
     };
   }, [isAuthenticated]);
 
