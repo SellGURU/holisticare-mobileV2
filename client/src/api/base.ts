@@ -50,11 +50,23 @@ function isPrivateHttpUrl(url: string) {
   }
 }
 
+const collapseDuplicateApiMount = (pathname: string) => {
+  let path = pathname || "/";
+  while (path.startsWith("/holisticare/holisticare/")) {
+    path = path.replace(/^\/holisticare/, "");
+  }
+  while (path.startsWith("/holisticare_test/holisticare_test/")) {
+    path = path.replace(/^\/holisticare_test/, "");
+  }
+  return path;
+};
+
 /** Point /mobile/html_report/* links at this app's API, never a LAN IP from the backend env. */
 const resolveMobileReportUrl = (url: string) => {
   try {
     const parsed = new URL(url);
-    const mobileIndex = parsed.pathname.indexOf("/mobile/html_report/");
+    const pathname = collapseDuplicateApiMount(parsed.pathname);
+    const mobileIndex = pathname.indexOf("/mobile/html_report/");
     if (mobileIndex < 0) {
       return url;
     }
@@ -64,7 +76,7 @@ const resolveMobileReportUrl = (url: string) => {
       return url;
     }
     const apiBase = resolveBaseEndPoint().replace(/\/$/, "");
-    const mobilePath = parsed.pathname.slice(mobileIndex);
+    const mobilePath = pathname.slice(mobileIndex);
     return `${apiBase}${mobilePath}${parsed.search}`;
   } catch {
     return url;
