@@ -398,8 +398,7 @@ export default function YouMenu() {
   };
 
   const resolveQuestionaryUrl = (questionnaire: any) => {
-    // if (env == 'test') {
-    return `${resolveBaseUrl()}/questionary/${encodedMi}/${
+    return `${resolveBaseUrl()}/questionary/${encodeURIComponent(encodedMi)}/${
       questionnaire.unique_id
     }/${questionnaire.forms_unique_id}`;
     // }
