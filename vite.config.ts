@@ -78,6 +78,9 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
+  optimizeDeps: {
+    exclude: ["@capacitor/filesystem", "@capacitor/share"],
+  },
   server: {
     fs: {
       strict: true,

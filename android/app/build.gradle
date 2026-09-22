@@ -11,8 +11,8 @@ android {
         applicationId "com.innovatifyltd"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 96
-        versionName "1.0.26"
+        versionCode 97
+        versionName "1.0.27"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -54,7 +54,12 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    implementation(files("$rootDir/libs/samsung-health-data-api-1.0.0-b2-5ba4cce677f09c01ce8e27a339ba7862.aar"))
+    def samsungHealthDataApiAar = file("$rootDir/libs/samsung-health-data-api-1.0.0-b2-5ba4cce677f09c01ce8e27a339ba7862.aar")
+    if (samsungHealthDataApiAar.exists()) {
+        implementation(files(samsungHealthDataApiAar))
+    } else {
+        logger.warn("Missing ${samsungHealthDataApiAar}; Samsung Health Data API features need this AAR in android/libs/")
+    }
     implementation("com.google.code.gson:gson:2.13.0")
 }
 

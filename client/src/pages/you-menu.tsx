@@ -13,8 +13,12 @@ import { bodySystemSurveys } from "@/data/body-system-surveys";
 import { formatDate, isColorDark } from "@/help";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-message";
+import { openExternalUrl } from "@/lib/open-external-url";
 import { rewriteHolisticPlanResourceLinks } from "@/lib/patientResourceLinks";
-import { sanitizeWellnessReportDisclaimer } from "@/lib/reportDisclaimerSanitize";
+import {
+  sanitizeWellnessReportDisclaimer,
+  wrapHeroTitleWithBrand,
+} from "@/lib/reportDisclaimerSanitize";
 import { AppContext } from "@/store/app";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -53,7 +57,6 @@ import {
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { subscribe, unsubscribe } from "@/lib/event";
 import { useLocation } from "wouter";
-import { openExternalUrl } from "@/lib/open-external-url";
 
 type WellnessScoreItem = {
   name?: string;
@@ -291,18 +294,29 @@ export default function YouMenu() {
     html: string;
     pdf: string;
   } | null>(null);
+  const [htmlReportDetail, setHtmlReportDetail] = useState("");
   const [checkingHtmlReport, setCheckingHtmlReport] = useState(true);
 
   const isValidReportUrl = (url: unknown): url is string =>
     typeof url === "string" && url.trim().length > 0;
 
+  const isApiProxyReportUrl = (url: string) =>
+    url.includes("/mobile/html_report/");
+
+  const isAzureBlobUrl = (url: string) =>
+    url.includes("blob.core.windows.net");
+
   const firstReportUrl = (...candidates: unknown[]) => {
-    for (const candidate of candidates) {
-      if (isValidReportUrl(candidate)) {
-        return resolveMobileReportUrl(candidate.trim());
-      }
-    }
-    return "";
+    const resolved = candidates
+      .filter(isValidReportUrl)
+      .map((candidate) => resolveMobileReportUrl(candidate.trim()));
+    if (resolved.length === 0) return "";
+    if (!Capacitor.isNativePlatform()) return resolved[0];
+    return (
+      resolved.find(isApiProxyReportUrl) ||
+      resolved.find((url) => !isAzureBlobUrl(url)) ||
+      resolved[0]
+    );
   };
 
   const loadReportFile = async (url: string, asBlob: boolean) => {
@@ -333,18 +347,23 @@ export default function YouMenu() {
       if (!isMountedRef.current) return;
         const html = firstReportUrl(res?.data?.html, res?.data?.html_proxy, res?.data?.html_sas);
         const pdf = firstReportUrl(res?.data?.pdf, res?.data?.pdf_proxy, res?.data?.pdf_sas);
+        const detail =
+          typeof res?.data?.detail === "string" ? res.data.detail.trim() : "";
         // Only treat as available when both usable URLs exist (API can 200 with empty links)
         if (html && pdf) {
           setHasHtmlReport(true);
           setHtmlReportUrls({ html, pdf });
+          setHtmlReportDetail("");
       } else {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
+        setHtmlReportDetail(detail);
       }
     } catch {
       if (!isMountedRef.current) return;
       setHasHtmlReport(false);
       setHtmlReportUrls(null);
+      setHtmlReportDetail("");
     } finally {
       if (isMountedRef.current) setCheckingHtmlReport(false);
     }
@@ -744,6 +763,10 @@ export default function YouMenu() {
     setLoadingHtmlReport(true);
     try {
       const res = await Application.getHtmlReport();
+      const readyFalseDetail =
+        res?.data?.ready === false && typeof res?.data?.detail === "string"
+          ? res.data.detail.trim()
+          : "";
       const pdfUrl = firstReportUrl(
         res?.data?.pdf,
         res?.data?.pdf_proxy,
@@ -753,7 +776,10 @@ export default function YouMenu() {
       if (!pdfUrl) {
         setHasHtmlReport(false);
         setHtmlReportUrls(null);
-        throw new Error("PDF report is not available yet.");
+        setHtmlReportDetail(readyFalseDetail);
+        throw new Error(
+          readyFalseDetail || "PDF report is not available yet.",
+        );
       }
 
       const htmlUrl = firstReportUrl(
@@ -765,23 +791,45 @@ export default function YouMenu() {
       const fallbackPdfUrl = htmlUrl.includes("/mobile/html_report/html")
         ? htmlUrl.replace(/\/html(\?|$)/, "/pdf$1")
         : "";
+      const sasPdfUrl = Capacitor.isNativePlatform()
+        ? firstReportUrl(res?.data?.pdf_sas)
+        : "";
 
       const pageIsPrivate =
         typeof window !== "undefined" &&
         isPrivateHttpUrl(`http://${window.location.hostname}`);
 
+      const candidateUrls = Array.from(
+        new Set(
+          Capacitor.isNativePlatform()
+            ? [
+                ...[pdfUrl, fallbackPdfUrl].filter(
+                  (url) => url && isApiProxyReportUrl(url),
+                ),
+                ...[pdfUrl, fallbackPdfUrl].filter(
+                  (url) =>
+                    url && !isApiProxyReportUrl(url) && !isAzureBlobUrl(url),
+                ),
+                sasPdfUrl,
+              ].filter(Boolean)
+            : [pdfUrl, fallbackPdfUrl].filter(Boolean),
+        ),
+      );
+
       let blob: Blob | null = null;
-      for (const url of [pdfUrl, fallbackPdfUrl]) {
+      let usedUrl = "";
+      for (const url of candidateUrls) {
         if (!url) continue;
         if (isPrivateHttpUrl(url) && !pageIsPrivate) continue;
         try {
           const loaded = await loadReportFile(url, true);
           if (loaded instanceof Blob && loaded.size > 0) {
             blob = loaded;
+            usedUrl = url;
             break;
           }
         } catch {
-          // Signed Azure URLs can fail in the browser; try the API copy next.
+          // Signed Azure URLs can fail in the WebView; try the API copy next.
         }
       }
       if (!blob) {
@@ -792,16 +840,26 @@ export default function YouMenu() {
           ? blob
           : new Blob([blob], { type: "application/pdf" });
       const fileName = "HolisticPlanReport.pdf";
+      const fallbackOpenUrl = isApiProxyReportUrl(usedUrl)
+        ? usedUrl
+        : candidateUrls.find((url) => url && isApiProxyReportUrl(url)) ||
+          usedUrl;
 
-      const objectUrl = URL.createObjectURL(pdfBlob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = fileName;
-      link.rel = "noopener";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      const { savePdfBlob } = await import("@/lib/save-pdf-native");
+      const result = await savePdfBlob(pdfBlob, fileName, {
+        fallbackUrl: fallbackOpenUrl,
+      });
+      if (result === "shared") {
+        toast({
+          title: "Report ready",
+          description: "Choose where to save the PDF.",
+        });
+      } else if (result === "opened") {
+        toast({
+          title: "Opened in browser",
+          description: "Use the browser download to save the PDF.",
+        });
+      }
     } catch (error: any) {
       console.error("Error downloading file:", error);
       toast({
@@ -866,9 +924,9 @@ export default function YouMenu() {
       const isSanitizedProxy = htmlUrl.includes("/mobile/html_report/html");
       // Proxy already ran branding + disclaimer + link rewrite server-side.
       const patientSafeHtml = isSanitizedProxy
-        ? rawHtml
+        ? wrapHeroTitleWithBrand(rawHtml)
         : rewriteHolisticPlanResourceLinks(
-            sanitizeWellnessReportDisclaimer(rawHtml),
+            wrapHeroTitleWithBrand(sanitizeWellnessReportDisclaimer(rawHtml)),
           );
       setHtmlReportDoc(
         isSanitizedProxy ? patientSafeHtml : withBaseHref(patientSafeHtml, htmlUrl),
@@ -1397,7 +1455,8 @@ export default function YouMenu() {
               <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
                 {!hasHealthData || !holisticPlanActionPlan.latest_deep_analysis
                   ? "Add health data to generate your first personalized deep analysis."
-                  : "Your deep analysis exists, but the downloadable report is not available yet."}
+                  : htmlReportDetail ||
+                    "Your deep analysis exists, but the downloadable report is not available yet."}
               </p>
             </div>
           ) : (

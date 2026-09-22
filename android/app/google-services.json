@@ -1,32 +1,13 @@
 {
   "project_info": {
-    "project_number": "799840885597",
-    "project_id": "test-929eb",
-    "storage_bucket": "test-929eb.firebasestorage.app"
+    "project_number": "820986502367",
+    "project_id": "holisticare-f9dd5",
+    "storage_bucket": "holisticare-f9dd5.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:799840885597:android:6c7a23170b488089eba6b4",
-        "android_client_info": {
-          "package_name": "com.example.app"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyA6Azxe06y9dz_cR_S7sm413V5t3LegFtU"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:799840885597:android:4080c5e20b33e5fceba6b4",
+        "mobilesdk_app_id": "1:820986502367:android:c834920c8c21a0cecd1d6a",
         "android_client_info": {
           "package_name": "com.innovatifyltd"
         }
@@ -34,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA6Azxe06y9dz_cR_S7sm413V5t3LegFtU"
+          "current_key": "AIzaSyCUyY3BGAFEUL61Q3rjPmx_cck9ixWzdb4"
         }
       ],
       "services": {

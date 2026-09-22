@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 const baseProductEndPoint = "https://vercel-backend-one-roan.vercel.app/holisticare";
 const baseTestEndPoint = "https://vercel-backend-one-roan.vercel.app/holisticare_test";
 const baseProductUrl = 'https://holisticare.vercel.app'
@@ -18,6 +20,9 @@ function resolveEnv(): 'test' | 'production' | 'local' {
   const fromVite = (import.meta as any).env?.VITE_API_ENV as string | undefined;
   if (fromVite === "local" || fromVite === "test" || fromVite === "production") {
     return fromVite;
+  }
+  if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+    return "production";
   }
   if (typeof window !== "undefined" && isLocalDevHost(window.location.hostname)) {
     return "local";
@@ -71,7 +76,9 @@ const resolveMobileReportUrl = (url: string) => {
       return url;
     }
     const pageIsLocal =
-      typeof window !== "undefined" && isLocalDevHost(window.location.hostname);
+      typeof window !== "undefined" &&
+      !Capacitor.isNativePlatform() &&
+      isLocalDevHost(window.location.hostname);
     if (pageIsLocal && isLocalDevHost(parsed.hostname)) {
       return url;
     }

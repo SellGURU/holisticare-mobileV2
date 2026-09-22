@@ -25,6 +25,7 @@ import { useEffect, useMemo, useState } from "react";
 import { resolveAnalyseIcon } from "../help";
 import BiomarkerChart from "@/components/trends/biomarkerChart";
 import DeferredHistoricalChart from "@/components/trends/DeferredHistoricalChart";
+import { MarkdownBold } from "@/components/markdown-bold";
 
 // Mock biomarker data for enhanced UI
 // const mockBiomarkers = [
@@ -747,7 +748,7 @@ export default function Trends() {
                       </span>
                       {selectedBiomarker.how_to_improve ? (
                         <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                          {selectedBiomarker.how_to_improve}
+                          <MarkdownBold text={selectedBiomarker.how_to_improve} />
                         </p>
                       ) : (
                         <p className="text-sm italic text-gray-400">
@@ -766,7 +767,7 @@ export default function Trends() {
                       </span>
                       {selectedBiomarker.insight ? (
                         <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                          {selectedBiomarker.insight}
+                          <MarkdownBold text={selectedBiomarker.insight} />
                         </p>
                       ) : (
                         <p className="text-sm italic text-gray-400">

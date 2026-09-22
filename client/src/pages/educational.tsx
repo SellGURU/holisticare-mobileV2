@@ -15,13 +15,13 @@ import {
   Video,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { MarkdownBold } from "@/components/markdown-bold";
 import { openExternalUrl } from "@/lib/open-external-url";
-
-interface EducationalProps {
-  content: string;
-  ["reference link"]: string;
-  title: string;
-}
+import {
+  DEFAULT_EDUCATIONAL_CONTENT,
+  normalizeEducationalItems,
+  type EducationalItem,
+} from "@/data/default-educational-content";
 
 const CONTENT_ICONS = [Video, Headphones, BookOpen, FileText] as const;
 
@@ -42,25 +42,24 @@ export default function EducationalPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentView, setCurrentView] = useState<"list" | "content">("list");
   const [selectedContent, setSelectedContent] =
-    useState<EducationalProps | null>(null);
+    useState<EducationalItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const [educationalContent, setEducationalContent] = useState<
-    EducationalProps[]
-  >([]);
+    EducationalItem[]
+  >(DEFAULT_EDUCATIONAL_CONTENT);
 
   const handleGetEducationalContent = () => {
     setIsLoading(true);
     Application.getEducationalContent()
       .then((res) => {
-        setEducationalContent(res.data);
+        const fromClinic = normalizeEducationalItems(res.data);
+        setEducationalContent(
+          fromClinic.length > 0 ? fromClinic : DEFAULT_EDUCATIONAL_CONTENT,
+        );
       })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res.response.data.detail,
-          variant: "destructive",
-        });
+      .catch(() => {
+        setEducationalContent(DEFAULT_EDUCATIONAL_CONTENT);
       })
       .finally(() => setIsLoading(false));
   };
@@ -144,7 +143,7 @@ export default function EducationalPage() {
           key={index}
           className="mb-1 ml-4 list-disc text-sm text-gray-600 dark:text-gray-400"
         >
-          {line.slice(2)}
+          <MarkdownBold text={line.slice(2)} />
         </li>
       );
     }
@@ -154,7 +153,7 @@ export default function EducationalPage() {
           key={index}
           className="mb-1 ml-4 list-decimal text-sm text-gray-600 dark:text-gray-400"
         >
-          {line.slice(line.indexOf(" ") + 1)}
+          <MarkdownBold text={line.slice(line.indexOf(" ") + 1)} />
         </li>
       );
     }
@@ -166,7 +165,7 @@ export default function EducationalPage() {
         key={index}
         className="mb-3 text-sm leading-relaxed text-gray-600 dark:text-gray-400"
       >
-        {line}
+        <MarkdownBold text={line} />
       </p>
     );
   };
