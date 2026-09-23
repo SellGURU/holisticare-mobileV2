@@ -70,7 +70,11 @@ import AccountSetting from "./ProfileComponents/AccountSetting";
 import ChangePasswordDialog from "./ProfileComponents/ChangePasswordDialog";
 import { apiRequest } from "@/lib/queryClient";
 import { secureStorage } from "@/services/secureStorage";
-import { deferPasswordChange, isPasswordChangeDeferred } from "@/lib/auth";
+import {
+  clearPasswordChangeDefer,
+  deferPasswordChange,
+  isPasswordChangeDeferred,
+} from "@/lib/auth";
 
 export default function Profile() {
   const { user, logout, fetchClientInformation } = useAuth();
@@ -126,16 +130,13 @@ export default function Profile() {
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const isPasswordChangeRequired =
-    clientInformation?.has_changed_password === false &&
-    !passwordChangeDeferred;
+  const hasUnchangedPassword =
+    clientInformation?.has_changed_password === false;
 
   const handleDeferPasswordChange = () => {
     deferPasswordChange();
     setPasswordChangeDeferred(true);
     setShowPasswordDialog(false);
-    localStorage.removeItem("requirePasswordChange");
-    setLocation("/");
   };
 
   useEffect(() => {
@@ -145,35 +146,7 @@ export default function Profile() {
     if (clientInformation.has_changed_password === false) {
       setShowPasswordDialog(true);
     }
-    localStorage.removeItem("requirePasswordChange");
   }, [clientInformation, passwordChangeDeferred]);
-
-  useEffect(() => {
-    if (isPasswordChangeRequired && !showPasswordDialog) {
-      setShowPasswordDialog(true);
-    }
-  }, [isPasswordChangeRequired, showPasswordDialog]);
-
-  // Prevent navigation away if password change is required
-  useEffect(() => {
-    if (isPasswordChangeRequired && location !== "/profile") {
-      setLocation("/profile");
-      if (!showPasswordDialog) {
-        setShowPasswordDialog(true);
-      }
-      toast({
-        title: "Password Change Required",
-        description: "Please change your password before continuing.",
-        variant: "destructive",
-      });
-    }
-  }, [
-    location,
-    isPasswordChangeRequired,
-    showPasswordDialog,
-    setLocation,
-    toast,
-  ]);
   const [editData, setEditData] = useState({
     firstName: "",
     lastName: "",
@@ -362,6 +335,8 @@ export default function Profile() {
           description: "Your password has been updated successfully.",
         });
         setShowPasswordDialog(false);
+        clearPasswordChangeDefer();
+        setPasswordChangeDeferred(false);
         setPasswordData({
           currentPassword: "",
           newPassword: "",
@@ -766,7 +741,7 @@ export default function Profile() {
         <ChangePasswordDialog
           open={showPasswordDialog}
           onOpenChange={setShowPasswordDialog}
-          isPasswordChangeRequired={isPasswordChangeRequired}
+          showLater={hasUnchangedPassword}
           onDefer={handleDeferPasswordChange}
           passwordData={passwordData}
           setPasswordData={setPasswordData}

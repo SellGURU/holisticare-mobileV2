@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   BookOpen,
   Check,
+  ExternalLink,
   Flag,
   Loader2,
   MessageCircle,
@@ -40,12 +41,63 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Capacitor } from "@capacitor/core";
 import { useChatViewport } from "@/hooks/use-keyboard-inset";
+import { openExternalUrl } from "@/lib/open-external-url";
 
 type ChatMode = "coach" | "ai";
+type ChatReference = { text: string; filename: string; url?: string };
 
-const isIOS = Capacitor.getPlatform() === "ios";
+const CLINIC_REF_NAMES = new Set([
+  "your holistic plan",
+  "your action plan",
+  "your lab results",
+  "your health data",
+  "your clinic records",
+  "clinic records",
+]);
+
+const PUBLISHED_REF_HOSTS = [
+  "medlineplus.gov",
+  "cdc.gov",
+  "who.int",
+  "heart.org",
+  "dietaryguidelines.gov",
+  "ods.od.nih.gov",
+  "nimh.nih.gov",
+];
+
+function isOfficialReferenceUrl(url?: string): boolean {
+  try {
+    const parsed = new URL(String(url || "").trim());
+    if (parsed.protocol !== "https:") return false;
+    return PUBLISHED_REF_HOSTS.some(
+      (host) =>
+        parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function allowedChatReferences(
+  refs?: ChatReference[] | string | null
+): ChatReference[] {
+  if (typeof refs === "string") {
+    try {
+      refs = JSON.parse(refs);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(refs)) return [];
+  return refs.filter((ref) => {
+    const name = String(ref?.filename ?? "").trim().toLowerCase();
+    const text = String(ref?.text ?? "").trim();
+    if (!name || !text) return false;
+    if (CLINIC_REF_NAMES.has(name)) return true;
+    return isOfficialReferenceUrl(ref.url);
+  });
+}
 
 interface Message {
   conversation_id: number;
@@ -61,10 +113,7 @@ interface Message {
   sender_type: "patient" | "coach" | "ai" | "user";
   time: string;
   message_id?: number; // Add unique message ID
-  references?: Array<{
-    text: string;
-    filename: string;
-  }>;
+  references?: ChatReference[];
   recipient?: boolean; // Indicates if message was sent/received
 }
 
@@ -94,12 +143,6 @@ const coaches: Coach[] = [
 
 export default function ChatPage() {
   const [activeMode, setActiveMode] = useState<ChatMode>("coach");
-
-  useEffect(() => {
-    if (isIOS && activeMode !== "coach") {
-      setActiveMode("coach");
-    }
-  }, [activeMode]);
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(coaches[0]);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -130,14 +173,10 @@ export default function ChatPage() {
   const [reportReason, setReportReason] = useState("");
   const [reportDetails, setReportDetails] = useState("");
   const [showReportModal, setShowReportModal] = useState(false);
-  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showReferencesModal, setShowReferencesModal] = useState(false);
-  const [selectedReferences, setSelectedReferences] = useState<
-    Array<{
-      text: string;
-      filename: string;
-    }>
-  >([]);
+  const [selectedReferences, setSelectedReferences] = useState<ChatReference[]>(
+    []
+  );
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -176,7 +215,12 @@ export default function ChatPage() {
   const handleGetMessagesId = async () => {
     Application.getMessagesId({ message_from: activeMode })
       .then((res) => {
-        setMessages(res.data.messages);
+        setMessages(
+          (res.data.messages || []).map((msg: Message) => ({
+            ...msg,
+            references: allowedChatReferences(msg.references),
+          }))
+        );
         setConversationId(res.data.conversation_id);
 
         // Initialize displayedMessages for all AI messages
@@ -239,14 +283,6 @@ export default function ChatPage() {
     handleGetMessagesId();
   }, [activeMode]);
 
-  // Check if disclaimer has been shown before
-  useEffect(() => {
-    const hasSeenDisclaimer = localStorage.getItem("chat-disclaimer-seen");
-    if (!hasSeenDisclaimer) {
-      setShowDisclaimer(true);
-    }
-  }, []);
-
   useEffect(() => {
     if (activeMode == "coach") {
       const interval = setInterval(() => {
@@ -293,7 +329,7 @@ export default function ChatPage() {
             sender_type: activeMode,
             time: new Date().toLocaleTimeString(),
             reported: false,
-            references: res.data.references || [],
+            references: allowedChatReferences(res.data.references),
           };
           setMessages((prev) => [...prev, newMessage]);
           // scrollToBottom()
@@ -404,7 +440,7 @@ export default function ChatPage() {
           sender_type: activeMode,
           time: new Date().toLocaleTimeString(),
           reported: false,
-          references: res.data.references || [],
+          references: allowedChatReferences(res.data.references),
         };
         setMessages((prev) => [...prev, newMessage]);
       }
@@ -433,15 +469,8 @@ export default function ChatPage() {
     });
   };
 
-  const handleDismissDisclaimer = () => {
-    setShowDisclaimer(false);
-    localStorage.setItem("chat-disclaimer-seen", "true");
-  };
-
-  const handleShowReferences = (
-    references: Array<{ text: string; filename: string }>
-  ) => {
-    setSelectedReferences(references);
+  const handleShowReferences = (references: ChatReference[]) => {
+    setSelectedReferences(allowedChatReferences(references));
     setShowReferencesModal(true);
   };
 
@@ -583,35 +612,6 @@ export default function ChatPage() {
           : undefined
       }
     >
-      {/* Disclaimer Toast */}
-      {showDisclaimer && (
-        <div
-          className="fixed inset-x-0 z-50 mx-auto max-w-md border-b border-amber-200/80 bg-amber-50/95 shadow-md backdrop-blur-md dark:border-amber-800/50 dark:bg-amber-950/90"
-          style={{ top: "env(safe-area-inset-top)" }}
-        >
-          <div className="flex items-start gap-3 px-4 py-3">
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
-              <Shield className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                Wellness only — not medical advice
-              </p>
-              <p className="mt-0.5 text-xs text-amber-800/80 dark:text-amber-200/70">
-                Chat responses are for general wellness support.
-              </p>
-            </div>
-            <Button
-              onClick={handleDismissDisclaimer}
-              size="sm"
-              className="h-8 flex-shrink-0 rounded-lg bg-amber-600 px-3 text-xs text-white hover:bg-amber-700"
-            >
-              Got it
-            </Button>
-          </div>
-        </div>
-      )}
-
       <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col px-3 py-2">
         {/* Header */}
         <div className="mb-2 flex shrink-0 items-center gap-2.5">
@@ -623,18 +623,26 @@ export default function ChatPage() {
               Chat
             </h1>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {activeMode === "coach" ? "Message your coach" : "Ask AI Copilot"}
+              {activeMode === "coach"
+                ? "Message your coach"
+                : "Not a diagnosis or definitive treatment"}
             </p>
           </div>
         </div>
 
         <div className="shrink-0">
           <SimpleModeSelect
-            disabled={isIOS}
-            hideAi={isIOS}
             activeMode={activeMode}
             setActiveMode={setActiveMode}
           />
+        </div>
+
+        <div className="mb-2 flex shrink-0 items-start gap-2 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 dark:border-amber-800/50 dark:bg-amber-950/70">
+          <Shield className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-[11px] leading-relaxed text-amber-900 dark:text-amber-100">
+            Not a diagnosis or definitive treatment. Check with your doctor
+            before making medical decisions.
+          </p>
         </div>
 
         {/* Messages */}
@@ -656,7 +664,7 @@ export default function ChatPage() {
                   <p className="mt-1 max-w-[14rem] text-xs text-gray-500 dark:text-gray-400">
                     {activeMode === "coach"
                       ? "Send a message to your health coach."
-                      : "Ask anything about your wellness plan."}
+                      : "Ask wellness questions about your own health data."}
                   </p>
                 </div>
               )}
@@ -719,7 +727,8 @@ export default function ChatPage() {
 
                           {isAI && !isReported && (
                             <div className="flex items-center gap-0.5">
-                              {msg.references && msg.references.length > 0 && (
+                              {allowedChatReferences(msg.references).length >
+                                0 && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -864,7 +873,7 @@ export default function ChatPage() {
               placeholder={
                 activeMode === "coach"
                   ? "Message your coach…"
-                  : "Ask AI Copilot…"
+                  : "Ask a wellness question…"
               }
               rows={1}
               className="min-h-[44px] max-h-28 flex-1 resize-none rounded-xl border-gray-200/80 bg-gray-50/80 px-3.5 py-3 text-sm placeholder:text-gray-400 focus-visible:ring-blue-500/30 dark:border-gray-600/80 dark:bg-gray-800/80"
@@ -986,7 +995,7 @@ export default function ChatPage() {
                     References
                   </SheetTitle>
                   <SheetDescription className="text-xs">
-                    Sources for this response
+                    Official public-health pages and your clinic records
                   </SheetDescription>
                 </div>
               </div>
@@ -1009,6 +1018,17 @@ export default function ChatPage() {
                 <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                   {reference.text}
                 </p>
+                {isOfficialReferenceUrl(reference.url) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 h-8 rounded-lg px-2.5 text-xs"
+                    onClick={() => void openExternalUrl(reference.url!)}
+                  >
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                    Open source
+                  </Button>
+                )}
               </div>
             ))}
             {selectedReferences.length === 0 && (

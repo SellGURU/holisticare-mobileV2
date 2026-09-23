@@ -1587,7 +1587,9 @@ export default function YouMenu() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-3 h-3 text-green-600" />
-                <span className="text-xs">Unlimited chat with AI copilot</span>
+                <span className="text-xs">
+                  Unlimited wellness Q&A with AI (not medical advice)
+                </span>
               </div>
             </div>
 
@@ -1633,7 +1635,7 @@ export default function YouMenu() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-3 h-3 text-green-600" />
                 <span className="text-xs">
-                  Chat with Copilot & coach booking
+                  Wellness Q&A chat and coach booking
                 </span>
               </div>
               <div className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useAuth, isPasswordChangeDeferred } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import Auth from "@/api/auth";
 import Application from "@/api/app";
-import { toast } from "@/hooks/use-toast";
 import NotificationApi from "@/api/notification";
 import {
   Sheet,
@@ -115,21 +114,6 @@ export default function ProfileHeader() {
           localStorage.setItem("client_information", JSON.stringify(res.data));
         } catch {
           // ignore storage write failures (private mode, quota, etc.)
-        }
-        // Check if password change is required
-        if (res.data?.has_changed_password === false && !isPasswordChangeDeferred()) {
-          // Store flag to open password dialog
-          localStorage.setItem("requirePasswordChange", "true");
-          // Redirect to profile page only if not already there
-          if (location !== "/profile") {
-            navigate("/profile");
-          }
-          // Show toast notification
-          toast({
-            title: "Password Change Required",
-            description: "Please change your password for account security.",
-            variant: "destructive",
-          });
         }
       })
       .catch((err) => {

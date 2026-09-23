@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { apiRequest } from "./queryClient";
 import { mockAuth } from "./mock-auth";
 
@@ -52,7 +53,7 @@ const PASSWORD_CHANGE_DEFERRED_KEY = "passwordChangeDeferred";
 
 export function isPasswordChangeDeferred(): boolean {
   try {
-    return sessionStorage.getItem(PASSWORD_CHANGE_DEFERRED_KEY) === "true";
+    return localStorage.getItem(PASSWORD_CHANGE_DEFERRED_KEY) === "true";
   } catch {
     return false;
   }
@@ -60,8 +61,8 @@ export function isPasswordChangeDeferred(): boolean {
 
 export function deferPasswordChange(): void {
   try {
-    sessionStorage.setItem(PASSWORD_CHANGE_DEFERRED_KEY, "true");
-    localStorage.removeItem("requirePasswordChange");
+    localStorage.setItem(PASSWORD_CHANGE_DEFERRED_KEY, "true");
+    sessionStorage.removeItem(PASSWORD_CHANGE_DEFERRED_KEY);
   } catch {
     // Private mode / storage blocked.
   }
@@ -69,6 +70,7 @@ export function deferPasswordChange(): void {
 
 export function clearPasswordChangeDefer(): void {
   try {
+    localStorage.removeItem(PASSWORD_CHANGE_DEFERRED_KEY);
     sessionStorage.removeItem(PASSWORD_CHANGE_DEFERRED_KEY);
   } catch {
     // Private mode / storage blocked.
@@ -321,8 +323,25 @@ class AuthService {
 
 export const authService = AuthService.getInstance();
 
+const authListeners = new Set<() => void>();
+
+export function notifyAuthChanged() {
+  authListeners.forEach((listener) => listener());
+}
+
+export function subscribeAuthChanged(listener: () => void) {
+  authListeners.add(listener);
+  return () => {
+    authListeners.delete(listener);
+  };
+}
+
 // Custom hook for auth (to be used in React components)
 export function useAuth() {
+  const [, setAuthTick] = useState(0);
+
+  useEffect(() => subscribeAuthChanged(() => setAuthTick((tick) => tick + 1)), []);
+
   return {
     user: authService.getUser(),
     isAuthenticated: authService.isAuthenticated(),

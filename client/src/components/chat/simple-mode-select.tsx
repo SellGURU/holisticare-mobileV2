@@ -56,7 +56,7 @@ export default function SimpleModeSelect({
 
   const allItems: { value: ChatMode; title: string; desc: string }[] = [
     { value: "coach", title: "Health Coach", desc: "Expert guidance from your clinic" },
-    { value: "ai", title: "AI Copilot", desc: "Instant wellness answers" },
+    { value: "ai", title: "AI Copilot", desc: "Not diagnosis or definitive treatment" },
   ];
 
   const items = hideAi ? allItems.filter((it) => it.value !== "ai") : allItems;

@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useAuth } from "@/lib/auth";
+import { isPasswordChangeDeferred, useAuth } from "@/lib/auth";
 import Application from "@/api/app";
 import { enablePlatformBackgroundSync, initializeRookForUser, isIOSRookPlatform } from "@/lib/rook";
 import AuthPage from "@/pages/auth";
@@ -27,11 +27,10 @@ import NotFound from "@/pages/not-found";
 import BootGate from "@/components/BootGate";
 import { LegalPrivacy, LegalTerms } from "@/pages/legal";
 // import { usePushNotifications } from "./hooks/use-pushNotification";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { StatusBar } from "@capacitor/status-bar";
-import { useToast } from "./hooks/use-toast";
 import { useVersionCheck } from "./hooks/use-version-check";
 import {
   UpdateAvailableModal,
@@ -41,9 +40,9 @@ import AppProvider from "./components/layout/AppProvider";
 import { getErrorMessage } from "./lib/error-message";
 
 function Router() {
-  const { isAuthenticated, fetchClientInformation, needsPasswordChange } = useAuth();
-  const [location, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
+  const wasAuthenticatedRef = useRef(false);
   const isOnboardingCompleted =
     localStorage.getItem("onboardingCompleted") === "true";
   // const { token, notifications } = usePushNotifications();
@@ -52,38 +51,40 @@ function Router() {
   // },[notifications])
   // useServiceWorker();
   useEffect(() => {
+    if (!isAuthenticated) {
+      wasAuthenticatedRef.current = false;
+      return;
+    }
+    const justLoggedIn = !wasAuthenticatedRef.current;
+    wasAuthenticatedRef.current = true;
+    if (!justLoggedIn) {
+      return;
+    }
+
+    Application.getClientInformation()
+      .then((res) => {
+        if (
+          res.data?.has_changed_password === false &&
+          !isPasswordChangeDeferred()
+        ) {
+          setLocation("/profile");
+        }
+      })
+      .catch((error) => {
+        console.warn(
+          "Password-change prompt skipped:",
+          getErrorMessage(error),
+        );
+      });
+  }, [isAuthenticated, setLocation]);
+
+  useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       // اینجا مطمئن میشیم اپ روی موبایل ران شده
       StatusBar.setOverlaysWebView({ overlay: false });
       StatusBar.setBackgroundColor({ color: "#ffffff" });
     }
   }, []);
-
-  // Check password change requirement after login
-  useEffect(() => {
-    if (isAuthenticated) {
-      console.log('🔍 Checking password change requirement...');
-      fetchClientInformation()
-        .then(() => {
-          const needsChange = needsPasswordChange();
-          console.log('🔍 Needs password change:', needsChange);
-
-          if (needsChange) {
-            console.log('🔍 Redirecting to profile page...');
-            localStorage.setItem("requirePasswordChange", "true");
-            setLocation("/profile");
-            toast({
-              title: "Password Change Required",
-              description: "Please change your password for account security.",
-              variant: "destructive",
-            });
-          }
-        })
-        .catch((error) => {
-          console.warn("Password-change check skipped:", getErrorMessage(error));
-        });
-    }
-  }, [isAuthenticated, fetchClientInformation, needsPasswordChange, setLocation, toast]);
 
   useEffect(() => {
     if (!isAuthenticated || !Capacitor.isNativePlatform()) {
@@ -143,13 +144,6 @@ function Router() {
     playStoreLink,
     setShowUpdateModal,
   } = useVersionCheck();
-  // Prevent navigation to other pages if password change is required
-  useEffect(() => {
-    if (isAuthenticated && needsPasswordChange() && location !== "/profile") {
-      setLocation("/profile");
-      localStorage.setItem("requirePasswordChange", "true");
-    }
-  }, [location, isAuthenticated, needsPasswordChange, setLocation]);
 
   if (!isAuthenticated) {
     return (

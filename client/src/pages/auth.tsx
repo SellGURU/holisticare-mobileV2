@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { clearPasswordChangeDefer, notifyAuthChanged } from "@/lib/auth";
 import { validateEmail, validatePassword } from "@/lib/utils";
 import { biometric } from "@/services/biometric";
 import { secureStorage } from "@/services/secureStorage";
@@ -356,6 +357,8 @@ export default function AuthPage() {
     localStorage.setItem("token", data.access_token);
     localStorage.setItem("encoded_mi", data.encoded_mi);
     localStorage.setItem("refresh_token", data.refresh_token);
+    clearPasswordChangeDefer();
+    notifyAuthChanged();
   };
   const handleDisableBiometric = async () => {
     await secureStorage.clear();
@@ -364,10 +367,6 @@ export default function AuthPage() {
 
     setPendingCredentials(null);
     setShowBiometricModal(false);
-
-    setTimeout(() => {
-      navigate("/");
-    }, 500);
   };
   const handleEnableBiometric = async () => {
     if (!pendingCredentials) return;
@@ -387,9 +386,6 @@ export default function AuthPage() {
 
     setPendingCredentials(null);
     setShowBiometricModal(false);
-    setTimeout(() => {
-      navigate("/");
-    }, 500);
   };
 
   const BiometricModal = () => {
@@ -480,15 +476,9 @@ export default function AuthPage() {
           } else {
             await secureStorage.save(data.email, data.password);
             setLocalStorageData(res.data);
-            setTimeout(() => {
-              navigate("/");
-            }, 500);
           }
         } else {
           setLocalStorageData(res.data);
-          setTimeout(() => {
-            navigate("/");
-          }, 500);
         }
       })
       .catch((res) => {

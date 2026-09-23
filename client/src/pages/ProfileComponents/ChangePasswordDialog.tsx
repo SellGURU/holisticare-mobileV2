@@ -36,7 +36,7 @@ interface ShowPasswords {
 interface ChangePasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  isPasswordChangeRequired: boolean;
+  showLater?: boolean;
   onDefer?: () => void;
   passwordData: PasswordData;
   setPasswordData: React.Dispatch<React.SetStateAction<PasswordData>>;
@@ -54,7 +54,7 @@ interface ValidationErrors {
 const ChangePasswordDialog = ({
   open,
   onOpenChange,
-  isPasswordChangeRequired,
+  showLater = false,
   onDefer,
   passwordData,
   setPasswordData,
@@ -125,21 +125,14 @@ const ChangePasswordDialog = ({
     <Sheet
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen && isPasswordChangeRequired) {
+        if (!nextOpen) {
           onDefer?.();
-          return;
         }
         onOpenChange(nextOpen);
       }}
     >
       <SheetContent
         side="bottom"
-        onInteractOutside={(e) => {
-          if (isPasswordChangeRequired && !onDefer) e.preventDefault();
-        }}
-        onEscapeKeyDown={(e) => {
-          if (isPasswordChangeRequired && !onDefer) e.preventDefault();
-        }}
         className="mx-auto flex max-h-[92dvh] w-full max-w-md flex-col gap-0 rounded-t-3xl border-x-0 border-t border-gray-200/50 bg-white/95 p-0 backdrop-blur-xl dark:border-gray-700/50 dark:bg-gray-900/95 [&>button]:hidden"
       >
         {/* Drag handle */}
@@ -169,11 +162,6 @@ const ChangePasswordDialog = ({
                 size="icon"
                 aria-label="Close"
                 className="h-8 w-8 flex-shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-                onClick={() => {
-                  if (isPasswordChangeRequired) {
-                    onDefer?.();
-                  }
-                }}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -421,7 +409,7 @@ const ChangePasswordDialog = ({
                 ? "Changing..."
                 : "Change Password"}
             </Button>
-            {isPasswordChangeRequired && (
+            {showLater && (
               <Button
                 type="button"
                 variant="ghost"
