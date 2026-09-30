@@ -37,6 +37,7 @@ import { formatDate, isColorDark } from "@/help";
 import { useToast } from "@/hooks/use-toast";
 import { openExternalUrl } from "@/lib/open-external-url";
 import { rewriteHolisticPlanResourceLinks } from "@/lib/patientResourceLinks";
+import { scrollElementInMainContainer, resetOuterAppScroll } from "@/lib/scrollIntoMainContainer";
 import {
   sanitizeWellnessReportDisclaimer,
   wrapHeroTitleWithBrand,
@@ -433,7 +434,10 @@ export default function YouMenu() {
       const element =
         document.getElementById("download-pdf-report-Box") ??
         document.getElementById("deep-analysis-section");
-      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrollElementInMainContainer(element, {
+        behavior: "smooth",
+        block: "center",
+      });
     }, delay);
   };
 
@@ -558,10 +562,12 @@ export default function YouMenu() {
 
   const scrollToAssignedQuestionnaires = (delay = 200) => {
     setCurrentView("main");
+    resetOuterAppScroll();
     setTimeout(() => {
-      document
-        .getElementById("assigned-questionnaires")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollElementInMainContainer(
+        document.getElementById("assigned-questionnaires"),
+        { behavior: "smooth", block: "start" },
+      );
     }, delay);
   };
 

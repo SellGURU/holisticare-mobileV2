@@ -29,6 +29,7 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
+import { resetOuterAppScroll } from "@/lib/scrollIntoMainContainer";
 interface MobileLayoutProps {
   children: ReactNode;
 }
@@ -153,7 +154,7 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
   // Reset scroll position whenever the route changes so each page starts at top
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "auto" });
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    resetOuterAppScroll();
   }, [location]);
 
   // Pages that should use the ProfileHeader instead of the default global header

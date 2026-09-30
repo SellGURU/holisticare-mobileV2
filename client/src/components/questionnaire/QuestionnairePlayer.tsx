@@ -7,8 +7,13 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  clampQuestionnaireStep,
+  isQuestionVisible,
+  resolveQuestionnaireState,
+  sanitizeQuestionnaireRespond,
+} from "@/lib/questionary/conditionalQuestions";
 import { fillableQuestions } from "@/lib/questionary/fillableQuestions";
-import ResolveConditions from "@/lib/questionary/resolveConditions";
 import { applicationData } from "@/lib/query/applicationQuery";
 import { isColorDark } from "@/help";
 import { AppContext } from "@/store/app";
@@ -187,16 +192,13 @@ export default function QuestionnairePlayer({
 
   const showConsent = Boolean(form?.show_consent && form?.consent_text);
 
-  const resolvedQuestions = useMemo(() => {
-    const withResponses = questions.map((question, index) => ({
-      ...question,
-      response: responses[index] ?? question.response ?? "",
-    }));
-    return ResolveConditions(withResponses);
-  }, [questions, responses]);
+  const resolvedQuestions = useMemo(
+    () => resolveQuestionnaireState(questions, responses),
+    [questions, responses],
+  );
 
   const visibleQuestions = useMemo(
-    () => resolvedQuestions.filter((question) => question.skip_validation !== true),
+    () => resolvedQuestions.filter(isQuestionVisible),
     [resolvedQuestions],
   );
 
@@ -212,10 +214,7 @@ export default function QuestionnairePlayer({
       : Math.round(((Math.max(visibleIndex, 0) + (currentQuestion ? 0 : totalVisible)) / totalVisible) * 100);
 
   const buildRespond = useCallback(() => {
-    return resolvedQuestions.map((question, index) => ({
-      ...question,
-      response: responses[index] ?? defaultResponse(question),
-    }));
+    return sanitizeQuestionnaireRespond(resolvedQuestions, responses);
   }, [resolvedQuestions, responses]);
 
   const persistAutosave = useCallback(() => {
@@ -271,6 +270,15 @@ export default function QuestionnairePlayer({
       cancelled = true;
     };
   }, [formUniqueId, mode, uniqueId]);
+
+  useEffect(() => {
+    const nextStep = clampQuestionnaireStep({
+      step,
+      totalVisible,
+      showConsent,
+    });
+    if (nextStep !== step) setStep(nextStep);
+  }, [showConsent, step, totalVisible]);
 
   useEffect(() => {
     if (mode === "checkin" || loading || complete || questions.length === 0) return;
