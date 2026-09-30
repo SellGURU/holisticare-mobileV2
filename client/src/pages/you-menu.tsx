@@ -37,6 +37,7 @@ import { formatDate, isColorDark } from "@/help";
 import { useToast } from "@/hooks/use-toast";
 import { openExternalUrl } from "@/lib/open-external-url";
 import { rewriteHolisticPlanResourceLinks } from "@/lib/patientResourceLinks";
+import { reserveWebPdfWindow, savePdfBlob } from "@/lib/save-pdf-native";
 import { scrollElementInMainContainer, resetOuterAppScroll } from "@/lib/scrollIntoMainContainer";
 import {
   sanitizeWellnessReportDisclaimer,
@@ -652,6 +653,7 @@ export default function YouMenu() {
   const handleGetHtmlReport = async () => {
     if (!holisticPlanActionPlan.latest_deep_analysis || !hasHtmlReport) return;
 
+    const previewWindow = reserveWebPdfWindow();
     setLoadingHtmlReport(true);
     try {
       const res = await Application.getHtmlReport();
@@ -739,9 +741,9 @@ export default function YouMenu() {
         : candidateUrls.find((url) => url && isApiProxyReportUrl(url)) ||
           usedUrl;
 
-      const { savePdfBlob } = await import("@/lib/save-pdf-native");
       const result = await savePdfBlob(pdfBlob, fileName, {
         fallbackUrl: fallbackOpenUrl,
+        previewWindow,
       });
       if (result === "shared") {
         toast({
@@ -755,6 +757,7 @@ export default function YouMenu() {
         });
       }
     } catch (error: any) {
+      previewWindow?.close();
       console.error("Error downloading file:", error);
       toast({
         title: "Download failed",
