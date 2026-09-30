@@ -32,7 +32,9 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { subscribe } from "@/lib/event";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useClientInformationQuery } from "@/hooks/queries";
+import { queryKeys } from "@/lib/query/keys";
 import {
   Activity,
   Award,
@@ -82,43 +84,14 @@ export default function Profile() {
   const [location, setLocation] = useLocation();
   const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [clientInformation, setClientInformation] = useState<{
-    action_plan: number;
-    age: number;
-    active_client: boolean;
-    plan?: string;
-    coach_username: [];
-    connected_wearable: boolean;
-    date_of_birth: string;
-    email: string;
-    id: string;
-    lab_test: number;
-    member_since: string;
-    name: string;
-    pheno_age: number;
-    sex: string;
-    verified_account: boolean;
-    // plan:string
-    has_changed_password?: boolean;
-    // plan: string;
-  }>();
+  const queryClient = useQueryClient();
+  const { data: clientInformation } = useClientInformationQuery();
 
   const handleGetClientInformation = async () => {
-    Application.getClientInformation()
-      .then((res) => {
-        setClientInformation(res.data);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res?.response?.data?.detail,
-          variant: "destructive",
-        });
-      });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.clientInformation,
+    });
   };
-  useEffect(() => {
-    handleGetClientInformation();
-  }, []);
 
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);

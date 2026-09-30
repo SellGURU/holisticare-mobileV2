@@ -873,7 +873,7 @@ export default function Onboarding() {
 
       {/* Content */}
       <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6">
+        <div key={step} className="w-full max-w-md space-y-6 ui-page-in">
           {renderStep()}
           
           {/* Navigation */}

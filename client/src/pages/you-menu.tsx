@@ -1,18 +1,40 @@
 import Application from "@/api/app";
-import { isPrivateHttpUrl, resolveBaseUrl, resolveMobileReportUrl } from "@/api/base";
+import { isPrivateHttpUrl } from "@/api/base";
+import QuestionnairePlayer from "@/components/questionnaire/QuestionnairePlayer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import IntelligenceSection from "@/components/intelligence/IntelligenceSection";
+import {
+  isPhenotypicAgeMetric,
+  resolveCalendarAge,
+} from "@/components/intelligence/intelligenceDisplay";
+import PhenoAgeHighlightCard from "@/components/youMenu/PhenoAgeHighlightCard";
+import { useIntelligenceSummary } from "@/hooks/useIntelligenceSummary";
+import {
+  EMPTY_PLAN,
+  AssignedQuestionnaire,
+  useAssignedQuestionnairesQuery,
+  useBiomarkersQuery,
+  useClientInformationQuery,
+  useHolisticPlanActionPlanQuery,
+  useHtmlReportQuery,
+} from "@/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  firstReportUrl,
+  isApiProxyReportUrl,
+  isAzureBlobUrl,
+} from "@/lib/htmlReport";
+import { queryKeys } from "@/lib/query/keys";
 import CategoryCards, { Biomarker } from "@/components/youMenu/healthSummary";
 import { bodySystemSurveys } from "@/data/body-system-surveys";
 import { formatDate, isColorDark } from "@/help";
 import { useToast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/lib/error-message";
 import { openExternalUrl } from "@/lib/open-external-url";
 import { rewriteHolisticPlanResourceLinks } from "@/lib/patientResourceLinks";
 import {
@@ -54,7 +76,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { subscribe, unsubscribe } from "@/lib/event";
 import { useLocation } from "wouter";
 
@@ -273,51 +296,43 @@ export default function YouMenu() {
     () => buildWellnessMetricCards(wellnessScore?.scores),
     [wellnessScore?.scores],
   );
-  const [clientInformation, setClientInformation] = useState<{
-    show_phenoage: boolean;
-    action_plan: number;
-    age: number;
-    coach_username: [];
-    connected_wearable: boolean;
-    date_of_birth: string;
-    email: string;
-    id: string;
-    lab_test: number;
-    member_since: string;
-    name: string;
-    pheno_age: number;
-    sex: string;
-    verified_account: boolean;
-  }>();
-  const [hasHtmlReport, setHasHtmlReport] = useState(false);
-  const [htmlReportUrls, setHtmlReportUrls] = useState<{
-    html: string;
-    pdf: string;
-  } | null>(null);
-  const [htmlReportDetail, setHtmlReportDetail] = useState("");
-  const [checkingHtmlReport, setCheckingHtmlReport] = useState(true);
-
-  const isValidReportUrl = (url: unknown): url is string =>
-    typeof url === "string" && url.trim().length > 0;
-
-  const isApiProxyReportUrl = (url: string) =>
-    url.includes("/mobile/html_report/");
-
-  const isAzureBlobUrl = (url: string) =>
-    url.includes("blob.core.windows.net");
-
-  const firstReportUrl = (...candidates: unknown[]) => {
-    const resolved = candidates
-      .filter(isValidReportUrl)
-      .map((candidate) => resolveMobileReportUrl(candidate.trim()));
-    if (resolved.length === 0) return "";
-    if (!Capacitor.isNativePlatform()) return resolved[0];
-    return (
-      resolved.find(isApiProxyReportUrl) ||
-      resolved.find((url) => !isAzureBlobUrl(url)) ||
-      resolved[0]
+  const queryClient = useQueryClient();
+  const { data: intelligenceSummary } = useIntelligenceSummary();
+  const { data: clientInformation, isPending: clientInfoPending } =
+    useClientInformationQuery();
+  const { data: biomarkersData = [], isPending: biomarkersPending } =
+    useBiomarkersQuery();
+  const { data: questionnaires = [], refetch: refetchQuestionnaires } =
+    useAssignedQuestionnairesQuery();
+  const { data: holisticPlanData, isPending: planPending } =
+    useHolisticPlanActionPlanQuery();
+  const holisticPlanActionPlan = holisticPlanData ?? EMPTY_PLAN;
+  const {
+    data: htmlReport,
+    isPending: htmlReportPending,
+    refetch: refetchHtmlReport,
+  } = useHtmlReportQuery();
+  const hasHtmlReport = htmlReport?.hasHtmlReport ?? false;
+  const htmlReportUrls = htmlReport?.urls ?? null;
+  const htmlReportDetail = htmlReport?.detail ?? "";
+  const checkingHtmlReport = htmlReportPending && htmlReport === undefined;
+  const clientInfoLoading = clientInfoPending && clientInformation === undefined;
+  const biomarkersLoading = biomarkersPending && biomarkersData.length === 0;
+  const calendarAge = resolveCalendarAge(
+    clientInformation?.age,
+    clientInformation?.date_of_birth,
+  );
+  const phenoAgeInsight = useMemo(() => {
+    const fromIntelligence = intelligenceSummary?.ages?.find((age) =>
+      isPhenotypicAgeMetric(age),
     );
-  };
+    return {
+      value: fromIntelligence?.value,
+      severity: fromIntelligence?.severity,
+      updatedAt:
+        fromIntelligence?.calculated_at ?? fromIntelligence?.source_as_of ?? null,
+    };
+  }, [intelligenceSummary?.ages]);
 
   const loadReportFile = async (url: string, asBlob: boolean) => {
     try {
@@ -332,165 +347,78 @@ export default function YouMenu() {
     return res.data;
   };
 
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+  const refreshHtmlReport = async () => {
+    await refetchHtmlReport();
+  };
 
-  const refreshHtmlReport = async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setCheckingHtmlReport(true);
-    try {
-      const res = await Application.getHtmlReport();
-      if (!isMountedRef.current) return;
-        const html = firstReportUrl(res?.data?.html, res?.data?.html_proxy, res?.data?.html_sas);
-        const pdf = firstReportUrl(res?.data?.pdf, res?.data?.pdf_proxy, res?.data?.pdf_sas);
-        const detail =
-          typeof res?.data?.detail === "string" ? res.data.detail.trim() : "";
-        // Only treat as available when both usable URLs exist (API can 200 with empty links)
-        if (html && pdf) {
-          setHasHtmlReport(true);
-          setHtmlReportUrls({ html, pdf });
-          setHtmlReportDetail("");
-      } else {
-        setHasHtmlReport(false);
-        setHtmlReportUrls(null);
-        setHtmlReportDetail(detail);
-      }
-    } catch {
-      if (!isMountedRef.current) return;
-      setHasHtmlReport(false);
-      setHtmlReportUrls(null);
-      setHtmlReportDetail("");
-    } finally {
-      if (isMountedRef.current) setCheckingHtmlReport(false);
+  const patchHtmlReport = (next: {
+    hasHtmlReport: boolean;
+    urls: { html: string; pdf: string } | null;
+    detail?: string;
+  }) => {
+    queryClient.setQueryData(queryKeys.htmlReport, {
+      hasHtmlReport: next.hasHtmlReport,
+      urls: next.urls,
+      detail: next.detail ?? "",
+    });
+  };
+
+  const [activeQuestionnaire, setActiveQuestionnaire] =
+    useState<AssignedQuestionnaire | null>(null);
+
+  const markQuestionnaireComplete = (formsUniqueId: string) => {
+    queryClient.setQueryData<AssignedQuestionnaire[]>(
+      queryKeys.assignedQuestionnaires,
+      (current) =>
+        (current ?? []).map((item) =>
+          item.forms_unique_id === formsUniqueId
+            ? { ...item, status: "Done" }
+            : item,
+        ),
+    );
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.assignedQuestionnaires,
+    });
+  };
+
+  const closeQuestionnaireViewer = (completedFormId?: string) => {
+    if (completedFormId) {
+      markQuestionnaireComplete(completedFormId);
+    } else {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.assignedQuestionnaires,
+      });
     }
+    setActiveQuestionnaire(null);
   };
 
   useEffect(() => {
-    void refreshHtmlReport();
-  }, []);
-  // const { token, notifications } = usePushNotifications();
-  // useEffect(() => {
-  //   if(Capacitor.isNativePlatform()){
-  //     if(token){
-  //       NotificationApi.registerToken(token).then((res) => {
-  //         // console.log(res);
-  //       });
-  //     }
-  //   }
-  // }, [token]);
-  const [questionnaires, setQuestionnaires] = useState<
-    {
-      Estimated_time: string;
-      status: string;
-      title: string;
-      unique_id: string;
-      forms_unique_id: string;
-    }[]
-  >([]);
-  const [openIframe, setOpenIframe] = useState(false);
-  const [iframeUrl, setIframeUrl] = useState("");
-  const [openedWindow, setOpenedWindow] = useState<Window | null>(null);
-  const wasHiddenRef = useRef(false);
-
-  useEffect(() => {
-    const handleMessage = (event: any) => {
-      if (event.data?.type === "QUESTIONARY_SUBMITTED") {
-        setOpenIframe(false);
-        setIframeUrl("");
-        setOpenedWindow(null); // Clear opened window state
-
-        handleIframeClosed();
-      }
+    if (!activeQuestionnaire) {
+      document.body.removeAttribute("data-questionnaire");
+      return;
+    }
+    document.body.setAttribute("data-questionnaire", "open");
+    return () => {
+      document.body.removeAttribute("data-questionnaire");
     };
+  }, [activeQuestionnaire]);
 
-    window.addEventListener("message", handleMessage);
-
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  const handleIframeClosed = () => {
-    handleGetAssignedQuestionaries();
-  };
-
-  const resolveQuestionaryUrl = (questionnaire: any) => {
-    return `${resolveBaseUrl()}/questionary/${encodeURIComponent(encodedMi)}/${
-      questionnaire.unique_id
-    }/${questionnaire.forms_unique_id}`;
-    // }
-    // return `${resolveBaseUrl()}/questionary/${encodedMi}/${questionnaire.unique_id}`;
-  };
-
-  const [biomarkersData, setBiomarkersData] = useState<Biomarker[]>([]);
-  const [holisticPlanActionPlan, setHolisticPlanActionPlan] = useState<{
-    latest_deep_analysis: string;
-    num_of_interventions: number;
-    progress: number;
-  }>({
-    latest_deep_analysis: "",
-    num_of_interventions: 0,
-    progress: 0,
-  });
-  const [encodedMi, setEncodedMi] = useState<string>("");
-  useEffect(() => {
-    setEncodedMi(localStorage.getItem("encoded_mi") || "");
-  }, []);
-
-  const handleGetClientInformation = async () => {
-    Application.getClientInformation()
-      .then((res) => {
-        setClientInformation(res.data);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: getErrorMessage(res),
-          variant: "destructive",
-        });
-      });
-  };
-  const handleGetBiomarkersData = async () => {
-    Application.getBiomarkersData()
-      .then((res) => {
-        setBiomarkersData(res.data.biomarkers);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: getErrorMessage(res),
-          variant: "destructive",
-        });
-      });
-  };
   useEffect(() => {
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios") {
       RookAppleHealth.enableBackGroundUpdates();
       RookAppleHealth.enableBackGroundEventsUpdates();
     }
   }, []);
+
   const handleGetHolisticPlanActionPlan = async () => {
-    Application.getHolisticPlanActionPlan()
-      .then((res) => {
-        setHolisticPlanActionPlan(res.data);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: getErrorMessage(res),
-          variant: "destructive",
-        });
-      });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.holisticPlanActionPlan,
+    });
   };
 
-  useEffect(() => {
-    handleGetClientInformation();
-    handleGetAssignedQuestionaries();
-    handleGetBiomarkersData();
-    handleGetHolisticPlanActionPlan();
-  }, []);
+  const handleGetAssignedQuestionaries = async () => {
+    await refetchQuestionnaires();
+  };
   useEffect(() => {
     const syncSummaries = async () => {
       if (Capacitor.isNativePlatform()) {
@@ -523,7 +451,7 @@ export default function YouMenu() {
     };
     const handleHealthReportUpdated = () => {
       handleGetHolisticPlanActionPlan();
-      void refreshHtmlReport({ silent: true });
+      void refreshHtmlReport();
     };
 
     subscribe("openHealthReport", handleOpenHealthReport);
@@ -532,6 +460,24 @@ export default function YouMenu() {
     return () => {
       unsubscribe("openHealthReport", handleOpenHealthReport);
       unsubscribe("healthReportUpdated", handleHealthReportUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    const refreshQuestionnaires = () => {
+      handleGetAssignedQuestionaries();
+    };
+    const openQuestionnairesSection = () => {
+      refreshQuestionnaires();
+      scrollToAssignedQuestionnaires();
+    };
+
+    subscribe("questionnairesUpdated", refreshQuestionnaires);
+    subscribe("openQuestionnaires", openQuestionnairesSection);
+
+    return () => {
+      unsubscribe("questionnairesUpdated", refreshQuestionnaires);
+      unsubscribe("openQuestionnaires", openQuestionnairesSection);
     };
   }, []);
 
@@ -546,12 +492,21 @@ export default function YouMenu() {
       window.history.replaceState({}, "", window.location.pathname);
       void openDeepAnalysisSection();
     }
+    if (urlParams.get("openQuestionnaires") === "1") {
+      window.history.replaceState({}, "", window.location.pathname);
+      handleGetAssignedQuestionaries();
+      scrollToAssignedQuestionnaires(400);
+    }
 
     CapacitorApp.addListener("appUrlOpen", (urlOpen: { url: string | URL }) => {
       const url = new URL(urlOpen.url);
       const key = url.searchParams.get("key");
       if (key === "downloadReport" || key === "openReport") {
         void openDeepAnalysisSection();
+      }
+      if (url.searchParams.get("openQuestionnaires") === "1") {
+        handleGetAssignedQuestionaries();
+        scrollToAssignedQuestionnaires(400);
       }
     });
   }, []);
@@ -601,83 +556,14 @@ export default function YouMenu() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const handleGetAssignedQuestionaries = async () => {
-    Application.getAssignedQuestionaries()
-      .then((res) => {
-        setQuestionnaires(res.data);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: getErrorMessage(res),
-          variant: "destructive",
-        });
-      });
+  const scrollToAssignedQuestionnaires = (delay = 200) => {
+    setCurrentView("main");
+    setTimeout(() => {
+      document
+        .getElementById("assigned-questionnaires")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, delay);
   };
-
-  // Check if opened window is closed and refetch questionnaires
-  // Only check window.closed on web platform, not on mobile (Android/iOS)
-  useEffect(() => {
-    if (!openedWindow) return;
-
-    // Skip window.closed check on native platforms - rely on message listener instead
-    if (Capacitor.isNativePlatform()) {
-      return;
-    }
-
-    const checkWindowClosed = setInterval(() => {
-      if (openedWindow.closed) {
-        handleGetAssignedQuestionaries();
-        setOpenedWindow(null);
-        clearInterval(checkWindowClosed);
-      }
-    }, 1000); // Check every second
-
-    return () => clearInterval(checkWindowClosed);
-  }, [openedWindow]);
-
-  // Listen for app state changes and page visibility changes to refresh questionnaires
-  // This works even if the window is still open - refreshes when user returns to app
-  useEffect(() => {
-    if (!openedWindow) return;
-
-    // Handle app state changes for native platforms
-    let appStateListener: any = null;
-    if (Capacitor.isNativePlatform()) {
-      appStateListener = CapacitorApp.addListener("appStateChange", (state) => {
-        // When app comes to foreground and we have an opened window, refresh questionnaires
-        // This works even if the window is still open
-        if (state.isActive && openedWindow) {
-          handleGetAssignedQuestionaries();
-        }
-      });
-    }
-
-    // Handle page visibility changes (works for both web and native)
-    // This refreshes data when user switches back to the app tab, even if window is still open
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        wasHiddenRef.current = true;
-      } else if (
-        document.visibilityState === "visible" &&
-        wasHiddenRef.current &&
-        openedWindow
-      ) {
-        // User returned to the app - refresh data even if window is still open
-        handleGetAssignedQuestionaries();
-        wasHiddenRef.current = false;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      if (appStateListener) {
-        appStateListener.remove();
-      }
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [openedWindow, handleGetAssignedQuestionaries]);
 
   const handleUpgrade = () => {
     toast({
@@ -774,9 +660,11 @@ export default function YouMenu() {
         res?.data?.pdf_sas,
       );
       if (!pdfUrl) {
-        setHasHtmlReport(false);
-        setHtmlReportUrls(null);
-        setHtmlReportDetail(readyFalseDetail);
+        patchHtmlReport({
+          hasHtmlReport: false,
+          urls: null,
+          detail: readyFalseDetail,
+        });
         throw new Error(
           readyFalseDetail || "PDF report is not available yet.",
         );
@@ -890,6 +778,17 @@ export default function YouMenu() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [showHtmlReport]);
 
+  useEffect(() => {
+    if (!showHtmlReport) {
+      document.body.removeAttribute("data-html-report");
+      return;
+    }
+    document.body.setAttribute("data-html-report", "open");
+    return () => {
+      document.body.removeAttribute("data-html-report");
+    };
+  }, [showHtmlReport]);
+
   const handleViewHtmlReport = async () => {
     if (!holisticPlanActionPlan.latest_deep_analysis || !hasHtmlReport) return;
 
@@ -905,8 +804,7 @@ export default function YouMenu() {
         );
       }
       if (!htmlUrl) {
-        setHasHtmlReport(false);
-        setHtmlReportUrls(null);
+        patchHtmlReport({ hasHtmlReport: false, urls: null });
         throw new Error("HTML report is not available yet.");
       }
       const pageIsPrivate =
@@ -963,10 +861,16 @@ export default function YouMenu() {
 
   const renderMainView = () => (
     <div className="space-y-5">
-      {showHtmlReport && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
-          <div className="bg-white dark:bg-neutral-900 w-[100%] h-[100%] overflow-hidden relative">
-            <div className="w-full fixed top-0 bg-white h-10 flex justify-end items-center px-4 z-10">
+      {showHtmlReport &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex h-dvh w-full flex-col bg-white dark:bg-neutral-900"
+            style={{
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
+          >
+            <div className="flex h-10 w-full shrink-0 items-center justify-end bg-white px-4 dark:bg-neutral-900">
               <Button
                 variant="ghost"
                 size="icon"
@@ -980,66 +884,45 @@ export default function YouMenu() {
               srcDoc={htmlReportDoc}
               title="Holistic Plan Report"
               sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
-              style={{
-                width: "100%",
-                height: "calc(100vh - 40px)",
-                marginTop: "40px",
-                border: "none",
-                background: "white",
-              }}
+              className="min-h-0 w-full flex-1 border-0 bg-white"
             />
+          </div>,
+          document.body,
+        )}
+      {clientInfoLoading ? (
+        <div className="flex w-full items-center gap-3 rounded-2xl border border-gray-200/60 bg-white/90 p-4 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90">
+          <span className="h-11 w-11 flex-shrink-0 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+          <div className="min-w-0 space-y-2">
+            <div className="h-7 w-12 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="h-3 w-20 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
           </div>
         </div>
-      )}
-      {/* Age stats */}
-      <div
-        className={`grid gap-3 ${
-          clientInformation?.show_phenoage === true ? "grid-cols-2" : "grid-cols-1"
-        }`}
-      >
-        {clientInformation?.show_phenoage === true && (
-          <button
-            type="button"
-            onClick={() =>
-              toast({
-                title: "Phenotypic Age",
-                description:
-                  "Phenotypic Age (PhenoAge) is an estimate of how old your body seems based on health markers—rather than just your chronological age.",
-              })
-            }
-            className="flex items-center gap-3 rounded-2xl border border-gray-200/60 bg-white/90 p-4 text-left shadow-sm transition-all active:scale-[0.99] dark:border-gray-700/50 dark:bg-gray-900/90"
-          >
-            <span
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-white shadow-sm"
-              style={{
-                background: brandInfo?.primary_color ?? "#10b981",
-              }}
-            >
-              <Activity className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p
-                className="text-2xl font-semibold leading-none text-gray-900 dark:text-gray-100"
-                style={{ color: brandInfo?.primary_color }}
-              >
-                {clientInformation?.pheno_age}
-              </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Phenotypic Age
-              </p>
-            </div>
-          </button>
-        )}
-
+      ) : clientInformation?.show_phenoage === true ? (
+        <PhenoAgeHighlightCard
+          bodyAge={phenoAgeInsight.value ?? clientInformation?.pheno_age}
+          calendarAge={calendarAge}
+          severity={phenoAgeInsight.severity}
+          primaryColor={brandInfo?.primary_color}
+          secondaryColor={brandInfo?.secondary_color}
+          updatedAt={phenoAgeInsight.updatedAt}
+          onLearnMore={() =>
+            toast({
+              title: "PhenoAge",
+              description:
+                "An estimate of how old your body seems based on lab markers—not your birthday alone. Your clinic uses it for screening, not as a diagnosis.",
+            })
+          }
+        />
+      ) : (
         <button
           type="button"
           onClick={() =>
             toast({
-              title: "Chronological Age",
-              description: "Based on your date of birth",
+              title: "Calendar age",
+              description: "Based on your date of birth.",
             })
           }
-          className="flex items-center gap-3 rounded-2xl border border-gray-200/60 bg-white/90 p-4 text-left shadow-sm transition-all active:scale-[0.99] dark:border-gray-700/50 dark:bg-gray-900/90"
+          className="flex w-full items-center gap-3 rounded-2xl border border-gray-200/60 bg-white/90 p-4 text-left shadow-sm transition-all active:scale-[0.99] dark:border-gray-700/50 dark:bg-gray-900/90"
         >
           <span
             className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-lg shadow-sm"
@@ -1054,14 +937,14 @@ export default function YouMenu() {
               className="text-2xl font-semibold leading-none text-gray-900 dark:text-gray-100"
               style={{ color: brandInfo?.secondary_color }}
             >
-              {clientInformation?.age}
+              {calendarAge ?? "—"}
             </p>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Chronological Age
+              Calendar age
             </p>
           </div>
         </button>
-      </div>
+      )}
 
       {/* Complete Profile CTA if data missing */}
       {!hasRequiredData && (
@@ -1071,8 +954,8 @@ export default function YouMenu() {
               Complete your Health Profile
             </h3>
             <p className="text-blue-700 dark:text-blue-300 text-xs mb-3">
-              We need your date of birth, height, weight, and some health data
-              to calculate your phenotypic age
+              We need your date of birth, height, weight, and some lab data
+              to estimate your body age
             </p>
             <Button
               onClick={() => setCurrentView("health-profile")}
@@ -1294,7 +1177,10 @@ export default function YouMenu() {
       </Card>
 
       {/* Assigned Questionnaires */}
-      <Card className="overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90">
+      <Card
+        id="assigned-questionnaires"
+        className="scroll-mt-24 overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90"
+      >
         <CardHeader className="pb-2 pt-4">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
             <span
@@ -1323,10 +1209,10 @@ export default function YouMenu() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="ui-stagger space-y-2">
               {questionnaires.map((questionnaire) => (
                 <div
-                  key={questionnaire.unique_id}
+                  key={questionnaire.forms_unique_id || questionnaire.unique_id}
                   className="flex items-center justify-between gap-2 rounded-2xl bg-gray-50/80 px-3 py-2.5 dark:bg-gray-800/50"
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -1361,13 +1247,9 @@ export default function YouMenu() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        const url = resolveQuestionaryUrl(questionnaire);
-                        void openExternalUrl(url).then(() => {
-                          // Track return-to-app refresh for native Browser sessions
-                          setOpenedWindow({ closed: false } as Window);
-                        });
+                        setActiveQuestionnaire(questionnaire);
                       }}
-                      className="h-7 flex-shrink-0 rounded-lg border-violet-200 px-2.5 text-[11px] text-violet-600 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-400 dark:hover:bg-violet-950/30"
+                      className="q-press h-7 flex-shrink-0 rounded-lg border-violet-200 px-2.5 text-[11px] text-violet-600 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-400 dark:hover:bg-violet-950/30"
                     >
                       Start
                     </Button>
@@ -1378,23 +1260,26 @@ export default function YouMenu() {
           )}
         </CardContent>
       </Card>
-      {openIframe && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
-          <div className="bg-white dark:bg-neutral-900 w-[100%] h-[100%] overflow-hidden relative">
-            <button
-              onClick={() => {
-                setOpenIframe(false);
-                setIframeUrl("");
-                handleIframeClosed();
-              }}
-              className="absolute top-3 right-6"
-            >
-              <X className="w-6 h-6 text-red-500" />
-            </button>
-            <iframe src={iframeUrl} className="w-full h-full border-none" />
-          </div>
-        </div>
-      )}
+      {activeQuestionnaire &&
+        createPortal(
+          <QuestionnairePlayer
+            uniqueId={activeQuestionnaire.unique_id}
+            formUniqueId={activeQuestionnaire.forms_unique_id}
+            title={activeQuestionnaire.title}
+            onClose={() => closeQuestionnaireViewer()}
+            onSaved={() =>
+              markQuestionnaireComplete(activeQuestionnaire.forms_unique_id)
+            }
+            onSubmitted={() =>
+              closeQuestionnaireViewer(activeQuestionnaire.forms_unique_id)
+            }
+          />,
+          document.body,
+        )}
+
+      <IntelligenceSection
+        hidePhenotypicAge={clientInformation?.show_phenoage === true}
+      />
 
       {/* Health Summary */}
       <Card className="overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90">
@@ -1412,7 +1297,12 @@ export default function YouMenu() {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          {!hasHealthData || biomarkersData.length === 0 ? (
+          {biomarkersLoading ? (
+            <div className="space-y-2 py-2">
+              <div className="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+              <div className="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+            </div>
+          ) : !hasHealthData || biomarkersData.length === 0 ? (
             <div className="flex flex-col items-center px-4 py-6 text-center">
               <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/40">
                 <Heart className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
@@ -1425,7 +1315,7 @@ export default function YouMenu() {
               </p>
             </div>
           ) : (
-            <CategoryCards data={biomarkersData} />
+            <CategoryCards data={biomarkersData as Biomarker[]} />
           )}
         </CardContent>
       </Card>
@@ -1436,7 +1326,7 @@ export default function YouMenu() {
         className="overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90"
       >
         <CardContent className="p-4">
-          {checkingHtmlReport ? (
+          {checkingHtmlReport || (planPending && holisticPlanData === undefined) ? (
             <div className="flex items-center justify-center py-6">
               <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
             </div>
@@ -1981,7 +1871,7 @@ export default function YouMenu() {
         />
 
         {/* Question */}
-        <Card>
+        <Card key={currentQuestion.id} className="ui-rise">
           <CardHeader>
             <CardTitle className="text-lg">
               {currentQuestion.question}
@@ -1994,53 +1884,67 @@ export default function YouMenu() {
                 onValueChange={(value) =>
                   handleSurveyAnswer(currentQuestion.id, value)
                 }
+                className="space-y-2"
               >
                 {currentQuestion.options.map((option, index) => (
-                  <div key={index} className="flex items-center space-x-2">
+                  <label
+                    key={index}
+                    htmlFor={`${currentQuestion.id}-${index}`}
+                    className={`q-choice flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
+                      currentAnswer === option
+                        ? "border-primary bg-primary/5"
+                        : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+                    }`}
+                  >
                     <RadioGroupItem
                       value={option}
                       id={`${currentQuestion.id}-${index}`}
                     />
-                    <Label
-                      htmlFor={`${currentQuestion.id}-${index}`}
-                      className="text-sm"
-                    >
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {option}
-                    </Label>
-                  </div>
+                    </span>
+                  </label>
                 ))}
               </RadioGroup>
             ) : (
               <div className="space-y-2">
-                {currentQuestion.options.map((option, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`${currentQuestion.id}-${index}`}
-                      checked={(currentAnswer as string[])?.includes(option)}
-                      onCheckedChange={(checked) => {
-                        const currentAnswers =
-                          (currentAnswer as string[]) || [];
-                        if (checked) {
-                          handleSurveyAnswer(currentQuestion.id, [
-                            ...currentAnswers,
-                            option,
-                          ]);
-                        } else {
-                          handleSurveyAnswer(
-                            currentQuestion.id,
-                            currentAnswers.filter((a) => a !== option),
-                          );
-                        }
-                      }}
-                    />
-                    <Label
+                {currentQuestion.options.map((option, index) => {
+                  const checked = (currentAnswer as string[])?.includes(option);
+                  return (
+                    <label
+                      key={index}
                       htmlFor={`${currentQuestion.id}-${index}`}
-                      className="text-sm"
+                      className={`q-choice flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
+                        checked
+                          ? "border-primary bg-primary/5"
+                          : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+                      }`}
                     >
-                      {option}
-                    </Label>
-                  </div>
-                ))}
+                      <Checkbox
+                        id={`${currentQuestion.id}-${index}`}
+                        checked={checked}
+                        onCheckedChange={(checkedValue) => {
+                          const currentAnswers =
+                            (currentAnswer as string[]) || [];
+                          if (checkedValue) {
+                            handleSurveyAnswer(currentQuestion.id, [
+                              ...currentAnswers,
+                              option,
+                            ]);
+                          } else {
+                            handleSurveyAnswer(
+                              currentQuestion.id,
+                              currentAnswers.filter((a) => a !== option),
+                            );
+                          }
+                        }}
+                      />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {option}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -2416,7 +2320,9 @@ export default function YouMenu() {
             </p>
           </div>
         )}
-        {renderCurrentView()}
+        <div key={currentView} className="ui-page-in">
+          {renderCurrentView()}
+        </div>
       </div>
     </div>
   );

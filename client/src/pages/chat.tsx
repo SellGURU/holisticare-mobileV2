@@ -1,7 +1,6 @@
 import Application from "@/api/app";
 import SimpleModeSelect from "@/components/chat/simple-mode-select";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Sheet,
   SheetClose,
@@ -27,22 +26,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   BookOpen,
-  Check,
+  Bot,
+  CheckCheck,
   ExternalLink,
   Flag,
   Loader2,
-  MessageCircle,
   MoreVertical,
   RotateCcw,
   Send,
-  Shield,
   ThumbsDown,
   ThumbsUp,
+  User,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatViewport } from "@/hooks/use-keyboard-inset";
+import { useChatMessagesQuery } from "@/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query/keys";
 import { openExternalUrl } from "@/lib/open-external-url";
+import { sortMessagesChronologically, formatMessageClock } from "@/lib/chatMessageOrder";
+import { subscribe, unsubscribe } from "@/lib/event";
 
 type ChatMode = "coach" | "ai";
 type ChatReference = { text: string; filename: string; url?: string };
@@ -112,9 +116,14 @@ interface Message {
   sender_name?: string;
   sender_type: "patient" | "coach" | "ai" | "user";
   time: string;
+  timestamp?: number;
   message_id?: number; // Add unique message ID
   references?: ChatReference[];
   recipient?: boolean; // Indicates if message was sent/received
+}
+
+function messageDisplayKey(msg: Message): string {
+  return `${msg.conversation_id}-${msg.sender_type}-${msg.date}-${msg.time}`;
 }
 
 interface Coach {
@@ -147,7 +156,7 @@ export default function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [displayedMessages, setDisplayedMessages] = useState<
-    Record<number, string>
+    Record<string, string>
   >({});
   const [previousCount, setPreviousCount] = useState(0);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -155,11 +164,15 @@ export default function ChatPage() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const lastMessageIdRef = useRef<number | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
   const { height: viewportHeight, keyboardOpen } = useChatViewport(rootRef);
   const [conversationId, setConversationId] = useState<number>(0);
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: chatData, isPending: chatPending } =
+    useChatMessagesQuery(activeMode);
+  const isInitialLoad = chatPending && chatData === undefined;
+  const [isSending, setIsSending] = useState(false);
   const [messageReactions, setMessageReactions] = useState<
     Record<number, "liked" | "disliked" | null>
   >({});
@@ -192,14 +205,16 @@ export default function ChatPage() {
   // useEffect(() => {
   //   scrollToBottom();
   // }, [messages, displayedMessages]); //
-  const formatText = (text: string) => {
-    // ابتدا بولدها رو جایگزین می‌کنیم
+  const formatText = (text: string, onDarkBubble = false) => {
+    const linkClass = onDarkBubble
+      ? "text-blue-100 underline break-all"
+      : "text-blue-600 dark:text-blue-400 underline break-all";
     const boldedText = text.replace(/\*(.*?)\*/g, (_match, p1) => `<strong>${p1}</strong>`);
 
-    // سپس لینک‌ها رو جایگزین می‌کنیم
     const linkifiedText = boldedText.replace(
       /(https?:\/\/[^\s]+)/g,
-      (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-green-400 underline">${url}</a>`
+      (url) =>
+        `<a href="${url}" target="_blank" rel="noopener noreferrer" class="${linkClass}">${url}</a>`
     );
 
     // متن رو به خطوط تقسیم می‌کنیم
@@ -212,104 +227,89 @@ export default function ChatPage() {
       </span>
     ));
   };  
-  const handleGetMessagesId = async () => {
-    Application.getMessagesId({ message_from: activeMode })
-      .then((res) => {
-        setMessages(
-          (res.data.messages || []).map((msg: Message) => ({
-            ...msg,
-            references: allowedChatReferences(msg.references),
-          }))
-        );
-        setConversationId(res.data.conversation_id);
+  const applyChatPayload = (payload: { conversation_id: number; messages: any[] }) => {
+    const nextMessages = sortMessagesChronologically(
+      (payload.messages || []).map((msg: Message) => ({
+        ...msg,
+        references: allowedChatReferences(msg.references),
+      })),
+    );
+    setMessages(nextMessages);
+    setConversationId(payload.conversation_id);
 
-        // Initialize displayedMessages for all AI messages
-        const initDisplayedMessages: Record<number, string> = {};
-        res.data.messages.forEach((msg: Message) => {
-          if (msg.sender_type === "ai" || msg.sender_type === "coach") {
-            initDisplayedMessages[msg.conversation_id] = msg.message_text;
-          }
-        });
-        setDisplayedMessages(initDisplayedMessages);
-
-        // Update previousCount to match loaded messages
-        if (res.data.messages.length > 0) {
-          setPreviousCount(res.data.messages.length);
-          const lastMsg = res.data.messages[res.data.messages.length - 1];
-          lastMessageIdRef.current = lastMsg.conversation_id;
-        }
-
-        // Sync feedback state with server data
-        const feedbackState: Record<number, "liked" | "disliked" | null> = {};
-        const reportedMessagesSet = new Set<string>();
-
-        res.data.messages.forEach((msg: Message) => {
-          if (msg.feedback === "like") {
-            feedbackState[msg.conversation_id] = "liked";
-          } else if (msg.feedback === "disliked") {
-            feedbackState[msg.conversation_id] = "disliked";
-          }
-
-          // Add reported messages from server using unique key
-          if (msg.reported) {
-            const messageKey = `${msg.conversation_id}-${msg.date}-${msg.time}`;
-            reportedMessagesSet.add(messageKey);
-          }
-        });
-
-        setMessageReactions(feedbackState);
-        setReportedMessages(reportedMessagesSet);
-      })
-      .catch((res) => {
-        if (res.response.data.detail) {
-          toast({
-            title: "Error",
-            description: res.response.data.detail,
-            variant: "destructive",
-          });
-        }
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    const feedbackState: Record<number, "liked" | "disliked" | null> = {};
+    const reportedMessagesSet = new Set<string>();
+    nextMessages.forEach((msg: Message) => {
+      if (msg.feedback === "like") {
+        feedbackState[msg.conversation_id] = "liked";
+      } else if (msg.feedback === "disliked") {
+        feedbackState[msg.conversation_id] = "disliked";
+      }
+      if (msg.reported) {
+        reportedMessagesSet.add(`${msg.conversation_id}-${msg.date}-${msg.time}`);
+      }
+    });
+    setMessageReactions(feedbackState);
+    setReportedMessages(reportedMessagesSet);
   };
+
   useEffect(() => {
-    setMessages([]);
-    setConversationId(0);
+    if (!chatData) return;
+    applyChatPayload(chatData);
+  }, [chatData]);
+
+  useEffect(() => {
     setDisplayedMessages({});
     setPreviousCount(0);
     lastMessageIdRef.current = null;
-    setIsLoading(true);
-    handleGetMessagesId();
   }, [activeMode]);
 
   useEffect(() => {
-    if (activeMode == "coach") {
-      const interval = setInterval(() => {
-        handleGetMessagesId();
-      }, 15000); // 15 seconds
-      return () => clearInterval(interval);
-    }
+    const openCoachChat = () => {
+      setActiveMode("coach");
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.chatMessages("coach"),
+      });
+    };
+    subscribe("openCoachChat", openCoachChat);
+    return () => {
+      unsubscribe("openCoachChat", openCoachChat);
+    };
+  }, [queryClient]);
 
-    // Cleanup interval on component unmount or when activeMode changes
-  }, [activeMode]);
+  const patchChatMessages = (
+    updater: (prev: { conversation_id: number; messages: any[] } | undefined) => {
+      conversation_id: number;
+      messages: any[];
+    },
+  ) => {
+    queryClient.setQueryData(queryKeys.chatMessages(activeMode), updater);
+  };
 
   const sendMessage = () => {
     if (!message.trim()) return;
 
     const text = message;
-    setIsLoading(true);
+    setIsSending(true);
 
-    const newMessage: Message = {
+    const optimisticMessage: Message = {
       conversation_id: 0,
       date: new Date().toISOString(),
       message_text: text,
       sender_type: "patient",
-      time: new Date().toLocaleTimeString(),
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+      timestamp: Date.now(),
       reported: false,
     };
-    setMessages((prev) => [...prev, newMessage]);
     setMessage("");
+    patchChatMessages((prev) => ({
+      conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+      messages: [...(prev?.messages ?? []), optimisticMessage],
+    }));
     Application.sendMessage({
       conversation_id:
         messages
@@ -322,17 +322,24 @@ export default function ChatPage() {
     })
       .then((res) => {
         if (res.data?.answer) {
-          const newMessage: Message = {
+          const reply: Message = {
             conversation_id: res.data.current_conversation_id,
             date: new Date().toISOString(),
             message_text: res.data.answer,
             sender_type: activeMode,
-            time: new Date().toLocaleTimeString(),
+            time: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            }),
+            timestamp: Date.now(),
             reported: false,
             references: allowedChatReferences(res.data.references),
           };
-          setMessages((prev) => [...prev, newMessage]);
-          // scrollToBottom()
+          patchChatMessages((prev) => ({
+            conversation_id: res.data.current_conversation_id,
+            messages: [...(prev?.messages ?? []), reply],
+          }));
         }
       })
       .catch((res) => {
@@ -343,7 +350,7 @@ export default function ChatPage() {
         });
       })
       .finally(() => {
-        setIsLoading(false);
+        setIsSending(false);
       });
   };
 
@@ -415,15 +422,14 @@ export default function ChatPage() {
     const userMessage = userMessages[userMessages.length - 1];
 
     setIsRegenerating(true);
-
-    setMessages((prev) =>
-      prev.filter(
-        (msg) =>
-          !(msg.conversation_id === messageId && msg.sender_type === "ai")
-      )
-    );
-
-    setIsLoading(true);
+    setIsSending(true);
+    patchChatMessages((prev) => ({
+      conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+      messages: (prev?.messages ?? []).filter(
+        (msg: Message) =>
+          !(msg.conversation_id === messageId && msg.sender_type === "ai"),
+      ),
+    }));
 
     try {
       const res = await Application.sendMessage({
@@ -442,7 +448,10 @@ export default function ChatPage() {
           reported: false,
           references: allowedChatReferences(res.data.references),
         };
-        setMessages((prev) => [...prev, newMessage]);
+        patchChatMessages((prev) => ({
+          conversation_id: res.data.current_conversation_id,
+          messages: [...(prev?.messages ?? []), newMessage],
+        }));
       }
     } catch (error: any) {
       toast({
@@ -452,7 +461,7 @@ export default function ChatPage() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsSending(false);
     }
   };
 
@@ -518,26 +527,30 @@ export default function ChatPage() {
     const lastMsg = messages[messages.length - 1];
     const isNewMessage = messages.length > previousCount;
 
+    const lastDisplayKey = messageDisplayKey(lastMsg);
+
     if (
       lastMsg.sender_type === "ai" &&
-      lastMessageIdRef.current === lastMsg.conversation_id &&
+      lastMessageIdRef.current === lastDisplayKey &&
       !isRegenerating
     ) {
       setDisplayedMessages((prev) => ({
         ...prev,
-        [lastMsg.conversation_id]: lastMsg.message_text,
+        [lastDisplayKey]: lastMsg.message_text,
       }));
       return;
     }
 
     if (previousCount === 0) {
-      const initMessages: Record<number, string> = {};
+      const initMessages: Record<string, string> = {};
       messages.forEach((msg) => {
-        initMessages[msg.conversation_id] = msg.message_text;
+        if (msg.sender_type === "ai" || msg.sender_type === "coach") {
+          initMessages[messageDisplayKey(msg)] = msg.message_text;
+        }
       });
       setDisplayedMessages(initMessages);
       setPreviousCount(messages.length);
-      lastMessageIdRef.current = lastMsg.conversation_id;
+      lastMessageIdRef.current = lastDisplayKey;
       return;
     }
 
@@ -549,14 +562,14 @@ export default function ChatPage() {
       const text = lastMsg.message_text;
       setDisplayedMessages((prev) => ({
         ...prev,
-        [lastMsg.conversation_id]: "",
+        [lastDisplayKey]: "",
       }));
 
       const interval = setInterval(() => {
         i++;
         setDisplayedMessages((prev) => ({
           ...prev,
-          [lastMsg.conversation_id]: text.slice(0, i),
+          [lastDisplayKey]: text.slice(0, i),
         }));
 
         if (i >= text.length) {
@@ -566,14 +579,16 @@ export default function ChatPage() {
       }, 20);
 
       setPreviousCount(messages.length);
-      lastMessageIdRef.current = lastMsg.conversation_id;
+      lastMessageIdRef.current = lastDisplayKey;
     } else if (isNewMessage) {
-      setDisplayedMessages((prev) => ({
-        ...prev,
-        [lastMsg.conversation_id]: lastMsg.message_text,
-      }));
+      if (lastMsg.sender_type === "ai" || lastMsg.sender_type === "coach") {
+        setDisplayedMessages((prev) => ({
+          ...prev,
+          [lastDisplayKey]: lastMsg.message_text,
+        }));
+      }
       setPreviousCount(messages.length);
-      lastMessageIdRef.current = lastMsg.conversation_id;
+      lastMessageIdRef.current = lastDisplayKey;
     }
   }, [messages, isRegenerating]);
 
@@ -602,301 +617,296 @@ export default function ChatPage() {
     setTimeout(() => scrollToBottom("smooth"), 300);
   };
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
+  }, [message]);
+
+  const assistantIcon =
+    activeMode === "coach" ? (
+      <User className="h-3.5 w-3.5 text-white" />
+    ) : (
+      <Bot className="h-3.5 w-3.5 text-white" />
+    );
+  const assistantIconBg =
+    activeMode === "coach"
+      ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+      : "bg-gradient-to-br from-blue-500 to-indigo-600";
+
   return (
     <div
       ref={rootRef}
-      className="flex flex-col h-full min-h-0 overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20 relative"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#e8eef2] dark:bg-[#0b141a]"
       style={
         keyboardOpen && viewportHeight
           ? { height: `${viewportHeight}px` }
           : undefined
       }
     >
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col px-3 py-2">
-        {/* Header */}
-        <div className="mb-2 flex shrink-0 items-center gap-2.5">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-sm">
-            <MessageCircle className="h-4 w-4 text-white" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-              Chat
-            </h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {activeMode === "coach"
-                ? "Message your coach"
-                : "Not a diagnosis or definitive treatment"}
-            </p>
-          </div>
-        </div>
-
-        <div className="shrink-0">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-lg flex-col md:max-w-2xl">
+        <div className="shrink-0 border-b border-black/5 bg-white/95 px-2 pt-1 backdrop-blur-md dark:border-white/10 dark:bg-[#111b21] md:px-3">
           <SimpleModeSelect
             activeMode={activeMode}
             setActiveMode={setActiveMode}
           />
         </div>
 
-        <div className="mb-2 flex shrink-0 items-start gap-2 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 dark:border-amber-800/50 dark:bg-amber-950/70">
-          <Shield className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="text-[11px] leading-relaxed text-amber-900 dark:text-amber-100">
-            Not a diagnosis or definitive treatment. Check with your doctor
-            before making medical decisions.
-          </p>
-        </div>
+        <div
+          ref={messagesContainerRef}
+          className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-2 md:px-3"
+          style={{ scrollbarWidth: "thin" }}
+        >
+          {isInitialLoad && (
+            <div className="flex justify-center px-4 py-16">
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            </div>
+          )}
 
-        {/* Messages */}
-        <Card className="min-h-0 flex-1 !border-none !bg-transparent !shadow-none">
-          <CardContent className="flex h-full min-h-0 flex-col p-0">
-            <div
-              ref={messagesContainerRef}
-              className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-2"
-              style={{ scrollbarWidth: "thin" }}
-            >
-              {messages.length === 0 && !isLoading && (
-                <div className="flex flex-col items-center px-4 py-16 text-center">
-                  <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30">
-                    <MessageCircle className="h-8 w-8 text-blue-500/70 dark:text-blue-400/70" />
-                  </span>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Start a conversation
-                  </p>
-                  <p className="mt-1 max-w-[14rem] text-xs text-gray-500 dark:text-gray-400">
-                    {activeMode === "coach"
-                      ? "Send a message to your health coach."
-                      : "Ask wellness questions about your own health data."}
-                  </p>
-                </div>
-              )}
+          {messages.length === 0 && !isInitialLoad && !isSending && (
+            <div className="flex flex-col items-center px-4 py-16 text-center">
+              <span
+                className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${assistantIconBg}`}
+              >
+                {assistantIcon}
+              </span>
+              <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+                {activeMode === "coach" ? "Health Coach" : "AI Copilot"}
+              </p>
+              <p className="mt-1 max-w-[16rem] text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">
+                {activeMode === "coach"
+                  ? "Send a message to your health coach."
+                  : "Ask wellness questions about your own health data."}
+              </p>
+            </div>
+          )}
 
-              {messages.map((msg, msgIndex) => {
-                const messageKey = `${msg.conversation_id}-${msg.date}-${msg.time}`;
-                const isReported = reportedMessages.has(messageKey);
-                const isPatient = msg.sender_type === "patient";
-                const isAI = msg.sender_type === "ai";
+          {messages.map((msg, msgIndex) => {
+            const messageKey = `${msg.conversation_id}-${msg.date}-${msg.time}`;
+            const isReported = reportedMessages.has(messageKey);
+            const isPatient = msg.sender_type === "patient";
+            const isAI = msg.sender_type === "ai";
+            const displayKey = messageDisplayKey(msg);
+            const aiBody =
+              displayedMessages[displayKey] ?? msg.message_text ?? "";
+            const lastAIMessage = messages
+              .filter((m) => m.sender_type === "ai")
+              .pop();
+            const isLastAIMessage =
+              lastAIMessage?.conversation_id === msg.conversation_id;
+            const prev = msgIndex > 0 ? messages[msgIndex - 1] : null;
+            const next =
+              msgIndex < messages.length - 1 ? messages[msgIndex + 1] : null;
+            const stacked = prev?.sender_type === msg.sender_type;
+            const lastInStack = next?.sender_type !== msg.sender_type;
 
-                return (
+            return (
+              <div
+                key={`${messageKey}-${msgIndex}`}
+                className={`flex items-end gap-1.5 ${
+                  isPatient ? "justify-end" : "justify-start"
+                } ${isReported ? "opacity-50" : ""} ${
+                  stacked ? "mt-2" : "mt-3.5 first:mt-0"
+                } ${msgIndex === messages.length - 1 ? "ui-bubble-in" : ""}`}
+              >
+                <div
+                  className={`group min-w-0 ${
+                    isPatient ? "max-w-[88%] sm:max-w-[75%]" : "max-w-[88%] sm:max-w-[78%]"
+                  }`}
+                >
                   <div
-                    key={`${messageKey}-${msgIndex}`}
-                    className={`flex items-end gap-1.5 ${
-                      isPatient ? "justify-end" : "justify-start"
-                    } ${isReported ? "opacity-50" : ""}`}
+                    className={`px-2.5 pb-1.5 pt-1.5 shadow-sm ${
+                      isPatient
+                        ? `bg-[#d9fdd3] text-gray-900 dark:bg-[#005c4b] dark:text-gray-50 ${
+                            lastInStack
+                              ? "rounded-2xl rounded-br-sm"
+                              : "rounded-2xl rounded-br-md"
+                          }`
+                        : `bg-white text-gray-900 dark:bg-[#1f2c33] dark:text-gray-100 ${
+                            lastInStack
+                              ? "rounded-2xl rounded-bl-sm"
+                              : "rounded-2xl rounded-bl-md"
+                          }`
+                    }`}
                   >
-                    {activeMode === "coach" &&
-                      isPatient &&
-                      msg.recipient && (
-                        <Check className="order-1 mb-2 h-3.5 w-3.5 flex-shrink-0 text-blue-500" />
-                      )}
-
-                    <div
-                      className={`max-w-[85%] group ${
-                        isPatient ? "order-2" : "order-1"
-                      }`}
-                    >
-                      <div
-                        className={`rounded-2xl px-3.5 py-2.5 shadow-sm ${
+                    <div className="text-[14.5px] leading-[1.45] break-words [overflow-wrap:anywhere]">
+                      {isAI
+                        ? formatText(aiBody)
+                        : formatText(msg.message_text, false)}
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-end gap-1">
+                      <span
+                        className={`select-none text-[10px] leading-none ${
                           isPatient
-                            ? "rounded-br-md bg-gradient-to-br from-blue-600 to-indigo-600 text-white"
-                            : activeMode === "coach"
-                              ? "rounded-bl-md border border-emerald-200/50 bg-white dark:border-emerald-800/30 dark:bg-gray-800"
-                              : "rounded-bl-md border border-blue-200/50 bg-white dark:border-blue-800/30 dark:bg-gray-800"
+                            ? "text-gray-600/80 dark:text-white/55"
+                            : "text-gray-400 dark:text-gray-500"
                         }`}
                       >
-                        <div
-                          className={`text-sm leading-relaxed break-words ${
-                            isPatient
-                              ? "text-white"
-                              : "text-gray-800 dark:text-gray-200"
+                        {formatMessageClock(msg)}
+                      </span>
+                      {isPatient && (
+                        <CheckCheck
+                          className={`h-3.5 w-3.5 ${
+                            msg.recipient
+                              ? "text-[#53bdeb]"
+                              : "text-gray-500/70 dark:text-white/45"
                           }`}
-                        >
-                          {isAI
-                            ? displayedMessages[msg.conversation_id] || ""
-                            : formatText(msg.message_text)}
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <p
-                            className={`text-[10px] ${
-                              isPatient
-                                ? "text-blue-100"
-                                : "text-gray-400 dark:text-gray-500"
-                            }`}
-                          >
-                            {msg.time}
-                          </p>
-
-                          {isAI && !isReported && (
-                            <div className="flex items-center gap-0.5">
-                              {allowedChatReferences(msg.references).length >
-                                0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 rounded-lg p-0 text-gray-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
-                                  onClick={() =>
-                                    handleShowReferences(msg.references!)
-                                  }
-                                  title="View references"
-                                >
-                                  <BookOpen className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className={`h-8 w-8 rounded-lg p-0 ${
-                                  messageReactions[msg.conversation_id] ===
-                                  "liked"
-                                    ? "text-emerald-600"
-                                    : "text-gray-400 hover:text-emerald-600"
-                                }`}
-                                onClick={() =>
-                                  handleMessageReaction(
-                                    msg.conversation_id,
-                                    "liked"
-                                  )
-                                }
-                              >
-                                <ThumbsUp className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className={`h-8 w-8 rounded-lg p-0 ${
-                                  messageReactions[msg.conversation_id] ===
-                                  "disliked"
-                                    ? "text-red-600"
-                                    : "text-gray-400 hover:text-red-600"
-                                }`}
-                                onClick={() =>
-                                  handleMessageReaction(
-                                    msg.conversation_id,
-                                    "disliked"
-                                  )
-                                }
-                              >
-                                <ThumbsDown className="h-3.5 w-3.5" />
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 rounded-lg p-0 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                  >
-                                    <MoreVertical className="h-3.5 w-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="w-44 rounded-xl"
-                                >
-                                  {(() => {
-                                    const lastAIMessage = messages
-                                      .filter((m) => m.sender_type === "ai")
-                                      .pop();
-                                    const isLastAIMessage =
-                                      lastAIMessage?.conversation_id ===
-                                      msg.conversation_id;
-
-                                    return isLastAIMessage ? (
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          handleRegenerateMessage(
-                                            msg.conversation_id
-                                          )
-                                        }
-                                        className="text-blue-600 dark:text-blue-400"
-                                      >
-                                        <RotateCcw className="mr-2 h-4 w-4" />
-                                        Regenerate
-                                      </DropdownMenuItem>
-                                    ) : null;
-                                  })()}
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleReportMessage(msg.conversation_id)
-                                    }
-                                    className="text-red-600 dark:text-red-400"
-                                  >
-                                    <Flag className="mr-2 h-4 w-4" />
-                                    Report
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-
-                          {isAI && isReported && (
-                            <span className="flex items-center gap-1 text-[10px] text-red-500">
-                              <Flag className="h-3 w-3" />
-                              Reported
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                        />
+                      )}
+                      {isAI && isReported && (
+                        <Flag className="h-3 w-3 text-red-500" />
+                      )}
                     </div>
                   </div>
-                );
-              })}
 
-              {isLoading && messages.length > 0 && (
-                <div className="flex justify-start">
-                  <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-gray-200/50 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      Thinking…
-                    </span>
-                  </div>
+                  {isAI && !isReported && (
+                    <div className="mt-0.5 flex items-center gap-0.5 pl-0.5">
+                      {allowedChatReferences(msg.references).length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 rounded-full p-0 text-gray-400 hover:bg-white/80 hover:text-blue-600 dark:hover:bg-white/10"
+                          onClick={() =>
+                            handleShowReferences(msg.references!)
+                          }
+                          title="View references"
+                        >
+                          <BookOpen className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-7 w-7 rounded-full p-0 ${
+                          messageReactions[msg.conversation_id] === "liked"
+                            ? "text-emerald-600"
+                            : "text-gray-400 hover:text-emerald-600"
+                        }`}
+                        onClick={() =>
+                          handleMessageReaction(msg.conversation_id, "liked")
+                        }
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-7 w-7 rounded-full p-0 ${
+                          messageReactions[msg.conversation_id] === "disliked"
+                            ? "text-red-600"
+                            : "text-gray-400 hover:text-red-600"
+                        }`}
+                        onClick={() =>
+                          handleMessageReaction(
+                            msg.conversation_id,
+                            "disliked",
+                          )
+                        }
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 rounded-full p-0 text-gray-400 hover:bg-white/80 dark:hover:bg-white/10"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          className="w-44 rounded-xl"
+                        >
+                          {isLastAIMessage ? (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleRegenerateMessage(msg.conversation_id)
+                              }
+                              className="text-blue-600 dark:text-blue-400"
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Regenerate
+                            </DropdownMenuItem>
+                          ) : null}
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleReportMessage(msg.conversation_id)
+                            }
+                            className="text-red-600 dark:text-red-400"
+                          >
+                            <Flag className="mr-2 h-4 w-4" />
+                            Report
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+            );
+          })}
 
-              <div ref={messagesEndRef} className="h-1" />
+          {isSending && messages.length > 0 && (
+            <div className="flex items-end justify-start pt-1">
+              <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-white px-3 py-2.5 shadow-sm dark:bg-[#1f2c33]">
+                <span className="flex items-center gap-1">
+                  <span className="chat-typing-dot h-1.5 w-1.5 rounded-full bg-gray-400" />
+                  <span className="chat-typing-dot h-1.5 w-1.5 rounded-full bg-gray-400" />
+                  <span className="chat-typing-dot h-1.5 w-1.5 rounded-full bg-gray-400" />
+                </span>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
 
-        {/* Input */}
+          <div ref={messagesEndRef} className="h-1" />
+        </div>
+
         <div
-          className="z-20 w-full shrink-0 border-t border-gray-200/60 bg-white/95 pt-2 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/95"
+          className="z-20 w-full shrink-0 bg-[#f0f2f5] px-2 pt-1.5 dark:bg-[#1d2933] md:px-3"
           style={{
             paddingBottom: keyboardOpen
-              ? "0.5rem"
-              : "max(0.5rem, env(safe-area-inset-bottom))",
+              ? "0.4rem"
+              : "max(0.4rem, env(safe-area-inset-bottom))",
           }}
         >
           <div className="flex items-end gap-2">
-            <Textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder={
-                activeMode === "coach"
-                  ? "Message your coach…"
-                  : "Ask a wellness question…"
-              }
-              rows={1}
-              className="min-h-[44px] max-h-28 flex-1 resize-none rounded-xl border-gray-200/80 bg-gray-50/80 px-3.5 py-3 text-sm placeholder:text-gray-400 focus-visible:ring-blue-500/30 dark:border-gray-600/80 dark:bg-gray-800/80"
-              onFocus={handleInputFocus}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-            />
+            <div className="flex min-w-0 flex-1 items-end rounded-[22px] bg-white px-3.5 py-0.5 shadow-sm dark:bg-[#2a3942]">
+              <Textarea
+                ref={textareaRef}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Message"
+                rows={1}
+                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-0 py-2 text-[15px] shadow-none placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-transparent dark:placeholder:text-gray-500"
+                onFocus={handleInputFocus}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+              />
+            </div>
             <Button
               onMouseDown={(e) => e.preventDefault()}
               onClick={sendMessage}
-              disabled={!message.trim()}
+              disabled={!message.trim() || isSending}
               size="icon"
-              className={`h-11 w-11 flex-shrink-0 rounded-xl shadow-sm transition-all ${
+              aria-label="Send message"
+              className={`h-11 w-11 flex-shrink-0 rounded-full text-white shadow-sm disabled:opacity-40 ${
                 activeMode === "coach"
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
-                  : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-              } text-white disabled:opacity-40`}
+                  ? "bg-[#00a884] hover:bg-[#008f72]"
+                  : "bg-[#00a884] hover:bg-[#008f72]"
+              }`}
             >
-              <Send className="h-4 w-4" />
+              {isSending ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
             </Button>
           </div>
         </div>

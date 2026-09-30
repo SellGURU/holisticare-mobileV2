@@ -1,4 +1,4 @@
-import Application from "@/api/app";
+import { useBiomarkersQuery } from "@/hooks/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,8 +21,9 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { resolveAnalyseIcon } from "../help";
+import { formatLabCalendarDate, parseLabCalendarDate } from "@/lib/labCalendarDate";
 import BiomarkerChart from "@/components/trends/biomarkerChart";
 import DeferredHistoricalChart from "@/components/trends/DeferredHistoricalChart";
 import { MarkdownBold } from "@/components/markdown-bold";
@@ -194,7 +195,8 @@ import { MarkdownBold } from "@/components/markdown-bold";
 // ];
 
 export default function Trends() {
-  const [mockBiomarkers, setMochBiomarkers] = useState<Array<any>>([]);
+  const { data: mockBiomarkers = [], isPending: biomarkersPending } =
+    useBiomarkersQuery();
   const [selectedBiomarker, setSelectedBiomarker] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [activeTab, setActiveTab] = useState("results");
@@ -220,11 +222,8 @@ export default function Trends() {
   };
   // values/date/status are newest-first (index 0 = latest), same as portal overview
   const getLatestStatus = (obj: any) => obj?.status?.[0] ?? "";
-  useEffect(() => {
-    Application.getBiomarkersData().then((res) => {
-      setMochBiomarkers(res.data.biomarkers);
-    });
-  }, []);
+  const biomarkersLoading =
+    biomarkersPending && mockBiomarkers.length === 0;
   const findMatchingLabel = (obj: any) => {
     const value = parseFloat(obj.values[0]); // latest value (values are newest-first)
     const status = getLatestStatus(obj); // latest status (status[0] with values[0])
@@ -286,7 +285,7 @@ export default function Trends() {
     const needsFocus = mockBiomarkers.filter((b) => b.outofref).length;
     const inRange = total - needsFocus;
     const lastUpdated = mockBiomarkers.reduce<Date | null>((latest, b) => {
-      const d = b.date?.[0] ? new Date(b.date[0]) : null;
+      const d = parseLabCalendarDate(b.date?.[0]);
       if (!d) return latest;
       return !latest || d > latest ? d : latest;
     }, null);
@@ -424,7 +423,14 @@ export default function Trends() {
 
         {/* Biomarker list */}
         <div className="space-y-3">
-          {filteredBiomarkers.map((biomarker: any) => (
+          {biomarkersLoading ? (
+            [1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-36 animate-pulse rounded-2xl bg-white/60 dark:bg-gray-800/40"
+              />
+            ))
+          ) : filteredBiomarkers.map((biomarker: any) => (
             <Card
               key={biomarker.name}
               className="cursor-pointer overflow-hidden rounded-2xl border-0 bg-white/90 shadow-md transition-all duration-200 hover:shadow-lg active:scale-[0.99] dark:bg-gray-800/90"
@@ -448,7 +454,7 @@ export default function Trends() {
                     </div>
                     <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
                       {biomarker.date?.[0]
-                        ? `Last test · ${new Date(biomarker.date[0]).toLocaleDateString()}`
+                        ? `Last test · ${formatLabCalendarDate(biomarker.date[0])}`
                         : "No test date"}
                     </p>
                   </div>
@@ -518,7 +524,7 @@ export default function Trends() {
             </Card>
           ))}
 
-          {filteredBiomarkers.length === 0 && (
+          {!biomarkersLoading && filteredBiomarkers.length === 0 && (
             <div className="flex flex-col items-center rounded-2xl bg-white/60 px-6 py-12 text-center dark:bg-gray-800/40">
               <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30">
                 <Activity className="h-8 w-8 text-blue-500/70 dark:text-blue-400/70" />
@@ -681,9 +687,7 @@ export default function Trends() {
                         </span>
                         <span className="font-medium text-gray-800 dark:text-gray-200">
                           {selectedBiomarker.date?.[0]
-                            ? new Date(
-                                selectedBiomarker.date[0]
-                              ).toLocaleDateString()
+                            ? formatLabCalendarDate(selectedBiomarker.date[0])
                             : "Not available"}
                         </span>
                       </div>

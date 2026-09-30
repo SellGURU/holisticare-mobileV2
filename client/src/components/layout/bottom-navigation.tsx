@@ -54,7 +54,7 @@ export default function BottomNavigation() {
             <Link key={item.path} href={item.path}>
               <button
                 className={cn(
-                  "flex flex-col items-center py-2 sm:py-3 px-1 sm:px-2 rounded-2xl transition-all duration-300",
+                  "ui-press flex flex-col items-center py-2 sm:py-3 px-1 sm:px-2 rounded-2xl transition-all duration-300",
                   isActive
                     ? "bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm shadow-lg transform scale-105"
                     : "hover:bg-gray-100/50 dark:hover:bg-gray-700/30 hover:shadow-md",

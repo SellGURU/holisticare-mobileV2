@@ -1,4 +1,4 @@
-import Application from "@/api/app";
+import { useEducationalContentQuery } from "@/hooks/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,12 +14,11 @@ import {
   Search,
   Video,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { MarkdownBold } from "@/components/markdown-bold";
 import { openExternalUrl } from "@/lib/open-external-url";
 import {
   DEFAULT_EDUCATIONAL_CONTENT,
-  normalizeEducationalItems,
   type EducationalItem,
 } from "@/data/default-educational-content";
 
@@ -43,30 +42,10 @@ export default function EducationalPage() {
   const [currentView, setCurrentView] = useState<"list" | "content">("list");
   const [selectedContent, setSelectedContent] =
     useState<EducationalItem | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const [educationalContent, setEducationalContent] = useState<
-    EducationalItem[]
-  >(DEFAULT_EDUCATIONAL_CONTENT);
-
-  const handleGetEducationalContent = () => {
-    setIsLoading(true);
-    Application.getEducationalContent()
-      .then((res) => {
-        const fromClinic = normalizeEducationalItems(res.data);
-        setEducationalContent(
-          fromClinic.length > 0 ? fromClinic : DEFAULT_EDUCATIONAL_CONTENT,
-        );
-      })
-      .catch(() => {
-        setEducationalContent(DEFAULT_EDUCATIONAL_CONTENT);
-      })
-      .finally(() => setIsLoading(false));
-  };
-
-  useEffect(() => {
-    handleGetEducationalContent();
-  }, []);
+  const { data, isPending } = useEducationalContentQuery();
+  const educationalContent = data ?? DEFAULT_EDUCATIONAL_CONTENT;
+  const isLoading = isPending && data === undefined;
 
   const filteredContent = useMemo(() => {
     if (!searchQuery) return educationalContent;

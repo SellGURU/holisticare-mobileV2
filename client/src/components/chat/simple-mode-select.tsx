@@ -1,7 +1,61 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Bot, User, ChevronDown, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bot, Check, ChevronDown, User } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 type ChatMode = "ai" | "coach";
+
+const ITEMS: {
+  value: ChatMode;
+  title: string;
+  subtitle: string;
+  status: string;
+}[] = [
+  {
+    value: "coach",
+    title: "Health Coach",
+    subtitle: "Messages from your clinic",
+    status: "Clinic coach",
+  },
+  {
+    value: "ai",
+    title: "AI Copilot",
+    subtitle: "Ask about your own health data",
+    status: "Not a diagnosis",
+  },
+];
+
+function ModeAvatar({
+  mode,
+  size = "md",
+}: {
+  mode: ChatMode;
+  size?: "sm" | "md" | "lg";
+}) {
+  const dim =
+    size === "lg" ? "h-12 w-12" : size === "sm" ? "h-8 w-8" : "h-10 w-10";
+  const icon = size === "lg" ? "h-6 w-6" : "h-4 w-4";
+  return (
+    <span
+      className={`flex flex-shrink-0 items-center justify-center rounded-full text-white ${dim} ${
+        mode === "ai"
+          ? "bg-gradient-to-br from-blue-500 to-indigo-600"
+          : "bg-gradient-to-br from-emerald-500 to-teal-600"
+      }`}
+    >
+      {mode === "ai" ? (
+        <Bot className={icon} />
+      ) : (
+        <User className={icon} />
+      )}
+    </span>
+  );
+}
 
 export default function SimpleModeSelect({
   activeMode,
@@ -15,79 +69,25 @@ export default function SimpleModeSelect({
   hideAi?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const optionsRef = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
     if (disabled) setOpen(false);
   }, [disabled]);
 
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (!open) return;
-      const focused = document.activeElement;
-      const idx = optionsRef.current.findIndex((el) => el === focused);
-      if (e.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        optionsRef.current[Math.min(idx + 1, optionsRef.current.length - 1)]?.focus();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        optionsRef.current[Math.max(idx - 1, 0)]?.focus();
-      } else if (e.key === "Enter" && idx >= 0) {
-        e.preventDefault();
-        optionsRef.current[idx]?.click();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  const allItems: { value: ChatMode; title: string; desc: string }[] = [
-    { value: "coach", title: "Health Coach", desc: "Expert guidance from your clinic" },
-    { value: "ai", title: "AI Copilot", desc: "Not diagnosis or definitive treatment" },
-  ];
-
-  const items = hideAi ? allItems.filter((it) => it.value !== "ai") : allItems;
+  const items = hideAi ? ITEMS.filter((it) => it.value !== "ai") : ITEMS;
   const activeItem = items.find((it) => it.value === activeMode) ?? items[0];
-
-  const iconFor = (mode: ChatMode) =>
-    mode === "ai" ? (
-      <Bot className="h-4 w-4 text-white" />
-    ) : (
-      <User className="h-4 w-4 text-white" />
-    );
-
-  const iconBgFor = (mode: ChatMode) =>
-    mode === "ai"
-      ? "bg-gradient-to-br from-blue-500 to-indigo-600"
-      : "bg-gradient-to-br from-emerald-500 to-teal-600";
 
   if (hideAi || disabled || items.length === 1) {
     return (
-      <div className="mb-3 flex items-center gap-2.5 rounded-2xl bg-white/90 px-3 py-2.5 shadow-sm dark:bg-gray-800/90">
-        <span
-          className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${iconBgFor("coach")}`}
-        >
-          {iconFor("coach")}
-        </span>
+      <div className="flex min-h-12 items-center gap-3 px-1">
+        <ModeAvatar mode="coach" />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          <p className="truncate text-[15px] font-semibold text-gray-900 dark:text-gray-100">
             {activeItem.title}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {activeItem.desc}
+          <p className="truncate text-[12px] text-gray-500 dark:text-gray-400">
+            {activeItem.status}
           </p>
         </div>
       </div>
@@ -95,86 +95,93 @@ export default function SimpleModeSelect({
   }
 
   return (
-    <div ref={rootRef} className="relative mb-3 w-full">
+    <>
       <button
         ref={triggerRef}
         type="button"
-        aria-haspopup="listbox"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl border border-gray-200/60 bg-white/90 px-3 py-2.5 shadow-sm transition-colors hover:bg-gray-50/80 dark:border-gray-700/60 dark:bg-gray-800/90 dark:hover:bg-gray-800"
+        onClick={() => setOpen(true)}
+        className="flex min-h-12 w-full items-center gap-3 rounded-xl px-1 py-0.5 text-left transition-colors active:bg-black/5 dark:active:bg-white/5"
       >
-        <span
-          className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${iconBgFor(activeMode)}`}
-        >
-          {iconFor(activeMode)}
-        </span>
-        <div className="min-w-0 flex-1 text-left">
-          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <ModeAvatar mode={activeMode} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
             {activeItem.title}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {activeItem.desc}
+          <p className="truncate text-[12px] leading-tight text-gray-500 dark:text-gray-400">
+            {activeItem.status}
           </p>
         </div>
-        <ChevronDown
-          className={`h-4 w-4 flex-shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
-        />
+        <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-400" />
       </button>
 
-      {open && (
-        <div
-          role="listbox"
-          aria-label="Select chat mode"
-          className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-lg dark:border-gray-700/60 dark:bg-gray-800"
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="bottom"
+          className="mx-auto flex w-full max-w-md flex-col gap-0 rounded-t-3xl border-x-0 border-t p-0 [&>button]:hidden"
         >
-          {items.map((it, i) => (
-            <div
-              key={it.value}
-              role="option"
-              aria-selected={activeMode === it.value}
-              tabIndex={0}
-              ref={(el) => {
-                optionsRef.current[i] = el;
-              }}
-              onClick={() => {
-                setActiveMode(it.value);
-                setOpen(false);
-                triggerRef.current?.focus();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  setActiveMode(it.value);
-                  setOpen(false);
-                  triggerRef.current?.focus();
-                }
-              }}
-              className={`flex cursor-pointer items-center gap-3 px-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
-                activeMode === it.value
-                  ? "bg-blue-50/80 dark:bg-blue-900/20"
-                  : ""
-              } ${i > 0 ? "border-t border-gray-100 dark:border-gray-700/50" : ""}`}
-            >
-              <span
-                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${iconBgFor(it.value)}`}
-              >
-                {iconFor(it.value)}
-              </span>
-              <div className="min-w-0 flex-1 text-left">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {it.title}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {it.desc}
-                </p>
-              </div>
-              {activeMode === it.value && (
-                <Check className="h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+          <div className="flex justify-center pb-1 pt-3">
+            <span className="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600" />
+          </div>
+          <SheetHeader className="space-y-1 px-5 pb-3 pt-1 text-left">
+            <SheetTitle className="text-base font-semibold">
+              Switch chat
+            </SheetTitle>
+            <SheetDescription className="text-xs">
+              Choose who you want to talk with
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-2 px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
+            {items.map((it) => {
+              const selected = activeMode === it.value;
+              return (
+                <button
+                  key={it.value}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => {
+                    setActiveMode(it.value);
+                    setOpen(false);
+                    triggerRef.current?.focus();
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors ${
+                    selected
+                      ? it.value === "ai"
+                        ? "border-blue-200 bg-blue-50 dark:border-blue-800/60 dark:bg-blue-950/40"
+                        : "border-emerald-200 bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-950/40"
+                      : "border-gray-200/80 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-800/80"
+                  }`}
+                >
+                  <ModeAvatar mode={it.value} size="lg" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+                      {it.title}
+                    </p>
+                    <p className="mt-0.5 text-[12px] leading-snug text-gray-500 dark:text-gray-400">
+                      {it.subtitle}
+                    </p>
+                  </div>
+                  <span
+                    className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                      selected
+                        ? it.value === "ai"
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-gray-300 dark:border-gray-500"
+                    }`}
+                  >
+                    {selected ? <Check className="h-3.5 w-3.5" /> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
+
+export { ModeAvatar };

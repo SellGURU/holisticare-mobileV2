@@ -100,6 +100,29 @@ class Application extends Api {
     const response = this.post("/mobile/tasks/show_assigned_questionaries", {});
     return response;
   }
+  static showQuestionnaire(data: { unique_id: string; f_unique_id: string }) {
+    return this.post("/mobile/questionnaires/show", data);
+  }
+  static saveQuestionnaire(data: {
+    unique_id: string;
+    f_unique_id: string;
+    respond: unknown[];
+  }) {
+    return this.post("/mobile/questionnaires/save", data, { timeout: 60000 });
+  }
+  static autosaveQuestionnaire(data: {
+    unique_id: string;
+    f_unique_id: string;
+    respond: unknown[];
+  }) {
+    return this.post("/mobile/questionnaires/autosave", data, { timeout: 30000 });
+  }
+  static showCheckin(data: { unique_id: string }) {
+    return this.post("/mobile/checkins/show", data);
+  }
+  static saveCheckin(data: { unique_id: string; respond: unknown[] }) {
+    return this.post("/mobile/checkins/save", data, { timeout: 60000 });
+  }
   static addEvent = (data: any) => {
     return this.post("/mobile/add_event", data);
   };
@@ -189,6 +212,10 @@ class Application extends Api {
       password: new_password
     });
     return response;
+  }
+
+  static getIntelligenceSummary() {
+    return this.get("/mobile/intelligence-summary");
   }
 
   static getWellnessScores(data?: { from_date?: string; to_date?: string }) {

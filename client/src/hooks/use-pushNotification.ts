@@ -42,7 +42,11 @@ export function usePushNotifications() {
     PushNotifications.addListener("pushNotificationReceived", (notification: PushNotificationSchema) => {
       console.log("Push received:", notification);
       setNotifications(prev => [...prev, notification]);
-      publish("pushNotificationReceived", { data: notification.data ?? {} });
+      publish("pushNotificationReceived", {
+        data: notification.data ?? {},
+        title: notification.title,
+        body: notification.body,
+      });
     });
 
     // 5. وقتی روی نوتیف کلیک شد
@@ -50,6 +54,8 @@ export function usePushNotifications() {
       console.log("Notification action performed:", notification.notification);
       publish("pushNotificationAction", {
         data: notification.notification?.data ?? {},
+        title: notification.notification?.title,
+        body: notification.notification?.body,
       });
     });
   }, []);

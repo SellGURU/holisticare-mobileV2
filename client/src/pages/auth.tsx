@@ -849,7 +849,7 @@ export default function AuthPage() {
         )}
 
         {stage === 3 && (
-          <div className="w-full max-w-md">
+          <div className="w-full max-w-md ui-page-in">
             <div className="overflow-hidden rounded-3xl border border-gray-200/60 bg-white/95 shadow-xl backdrop-blur-sm dark:border-gray-700/50 dark:bg-gray-900/95">
               <div className="px-6 pb-2 pt-6 text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50 shadow-sm ring-1 ring-gray-100 dark:bg-gray-800 dark:ring-gray-700">

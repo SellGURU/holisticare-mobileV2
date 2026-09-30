@@ -1,5 +1,5 @@
 import Application from "@/api/app";
-import { resolveBaseUrl } from "@/api/base";
+import QuestionnairePlayer from "@/components/questionnaire/QuestionnairePlayer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,9 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useTodayTasksQuery, useWeeklyTasksQuery } from "@/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query/keys";
 import {
   Apple,
   Calendar,
@@ -27,6 +30,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState, useRef, useMemo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface Filters {
   Type: string[];
@@ -139,12 +143,8 @@ export default function Plan() {
     id: null,
     title: null,
   });
-  const [encodedMi, setEncodedMi] = useState<string>("");
+  const [activeCheckin, setActiveCheckin] = useState<Task | null>(null);
   const dateScrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setEncodedMi(localStorage.getItem("encoded_mi") || "");
-  }, []);
   const getYouTubeEmbedUrl = (url: string) => {
     const standardOrShortsRegExp =
       /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:\S+)?/;
@@ -236,55 +236,38 @@ export default function Plan() {
     );
   };
 
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const todayQuery = useTodayTasksQuery(activeTab === "today");
+  const weeklyQuery = useWeeklyTasksQuery(activeTab === "calendar");
+  const isLoading =
+    activeTab === "today"
+      ? todayQuery.isPending && todayQuery.data === undefined
+      : weeklyQuery.isPending && weeklyQuery.data === undefined;
+
   const handleGetTodayTasks = async () => {
-    setIsLoading(true);
-    Application.getTodayTasks()
-      .then((res) => {
-        const tasks: Task[] = res.data;
-        setTodaysTasks(tasks);
-        const initialValues: Record<string, number> = {};
-        tasks.forEach((task: Task) => {
-          initialValues[task.task_id] = task.Temp_value ?? 0;
-        });
-        setTaskValues(initialValues);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res.response.data.detail,
-          variant: "destructive",
-        });
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.todayTasks });
   };
   const handleGetWeeklyTasks = async () => {
-    setIsLoading(true);
-    Application.getWeeklyTasks()
-      .then((res) => {
-        setWeeklyTasks(res.data);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res.response.data.detail,
-          variant: "destructive",
-        });
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.weeklyTasks });
   };
+
   useEffect(() => {
-    if (activeTab === "calendar") {
-      handleGetWeeklyTasks();
-    } else {
-      handleGetTodayTasks();
+    if (!todayQuery.data) return;
+    const tasks = todayQuery.data as Task[];
+    setTodaysTasks(tasks);
+    const initialValues: Record<string, number> = {};
+    tasks.forEach((task: Task) => {
+      initialValues[task.task_id] = task.Temp_value ?? 0;
+    });
+    setTaskValues((prev) => ({ ...initialValues, ...prev }));
+  }, [todayQuery.data]);
+
+  useEffect(() => {
+    if (weeklyQuery.data) {
+      setWeeklyTasks(weeklyQuery.data as WeeklyTask[]);
     }
-  }, [activeTab]);
+  }, [weeklyQuery.data]);
 
   // Scroll to center when weekly tasks are loaded
   useEffect(() => {
@@ -301,6 +284,11 @@ export default function Plan() {
     }
   }, [weeklyTasks, activeTab]);
 
+  const invalidatePlanTasks = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.todayTasks });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.weeklyTasks });
+  };
+
   const handleCheckTask = (taskId: string) => {
     Application.checkTask({ task_id: taskId })
       .then(() => {
@@ -308,6 +296,7 @@ export default function Plan() {
           title: "Task Checked",
           description: "Your task has been checked.",
         });
+        invalidatePlanTasks();
       })
       .catch((res) => {
         toast({
@@ -324,6 +313,7 @@ export default function Plan() {
           title: "Task Unchecked",
           description: "Your task has been unchecked.",
         });
+        invalidatePlanTasks();
       })
       .catch((res) => {
         toast({
@@ -341,6 +331,7 @@ export default function Plan() {
           title: "Value Updated",
           description: "Your value has been updated.",
         });
+        invalidatePlanTasks();
       })
       .catch((res) => {
         toast({
@@ -350,10 +341,11 @@ export default function Plan() {
         });
       });
   };
+  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   useEffect(() => {
     const encoded_mi = localStorage.getItem("encoded_mi");
     const fetchVideos = async () => {
-      setIsLoading(true);
+      setIsLoadingVideos(true);
       const videoFiles = selectData?.Files?.filter(
         (file: any) =>
           file.Type?.split("/")[0] === "video" ||
@@ -391,7 +383,7 @@ export default function Plan() {
 
       const videos = await Promise.all(videoPromises as Promise<FileData>[]);
       setVideoData(videos as FileData[]);
-      setIsLoading(false);
+      setIsLoadingVideos(false);
     };
 
     if (selectIndexTitle.id && selectData) {
@@ -400,6 +392,17 @@ export default function Plan() {
   }, [selectIndexTitle.id, selectData]);
 
   const [openedWindow, setOpenedWindow] = useState<Window | null>(null);
+
+  useEffect(() => {
+    if (!activeCheckin) {
+      document.body.removeAttribute("data-questionnaire");
+      return;
+    }
+    document.body.setAttribute("data-questionnaire", "open");
+    return () => {
+      document.body.removeAttribute("data-questionnaire");
+    };
+  }, [activeCheckin]);
 
   useEffect(() => {
     if (!openedWindow) return;
@@ -641,17 +644,9 @@ export default function Plan() {
             disabled={task.Status || !isCurrentDay}
             onClick={(event) => {
               event.stopPropagation();
-              handleUpdateTaskStatus(task.task_id, true);
-              if (!task.Status) {
-                handleCheckTask(task.task_id);
-              }
-              const url = `${resolveBaseUrl()}/checkin/${encodedMi}/${task.task_id}`;
-              const newWindow = window.open(url, "_blank");
-              if (newWindow) {
-                setOpenedWindow(newWindow);
-              }
+              setActiveCheckin(task);
             }}
-            className={`h-11 w-full rounded-xl text-sm font-medium !mt-4 !-mb-6 ${
+            className={`q-press h-11 w-full rounded-xl text-sm font-medium !mt-4 !-mb-6 ${
               task.Status
                 ? "bg-emerald-500 text-white opacity-50"
                 : "hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
@@ -1140,7 +1135,7 @@ export default function Plan() {
             openTaskDetails(task);
           }
         }}
-        className={`cursor-pointer overflow-hidden rounded-2xl border-0 shadow-md transition-all ${
+        className={`ui-press cursor-pointer overflow-hidden rounded-2xl border-0 shadow-md transition-all ${
           completed
             ? "bg-white/70 dark:bg-gray-800/60"
             : "bg-white/95 dark:bg-gray-800/95"
@@ -1305,7 +1300,9 @@ export default function Plan() {
                 ))}
               </div>
             ) : todaysTasks.length > 0 ? (
-              todaysTasks.map((task) => renderTaskCard(task, true))
+              <div className="ui-stagger space-y-3">
+                {todaysTasks.map((task) => renderTaskCard(task, true))}
+              </div>
             ) : (
               renderEmptyState("No tasks for today yet")
             )}
@@ -1346,7 +1343,7 @@ export default function Plan() {
                           key={dateInfo.key}
                           type="button"
                           onClick={() => setSelectedDate(dateInfo.key)}
-                          className={`flex-shrink-0 rounded-2xl px-3 py-2.5 transition-all ${
+                          className={`ui-press flex-shrink-0 rounded-2xl px-3 py-2.5 transition-all ${
                             isSelected
                               ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md"
                               : isCurrentDay
@@ -1437,7 +1434,7 @@ export default function Plan() {
                         </div>
                       </div>
 
-                      <div className="space-y-3">
+                      <div className="ui-stagger space-y-3">
                         {selectedDayTasks.length > 0
                           ? selectedDayTasks.map((task) =>
                               renderTaskCard(task, isCurrentDay)
@@ -1558,6 +1555,21 @@ export default function Plan() {
           )}
         </SheetContent>
       </Sheet>
+      {activeCheckin &&
+        createPortal(
+          <QuestionnairePlayer
+            mode="checkin"
+            uniqueId={activeCheckin.task_id}
+            title={activeCheckin.Title}
+            onClose={() => setActiveCheckin(null)}
+            onSaved={() => {
+              handleUpdateTaskStatus(activeCheckin.task_id, true);
+              handleCheckTask(activeCheckin.task_id);
+            }}
+            onSubmitted={() => setActiveCheckin(null)}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

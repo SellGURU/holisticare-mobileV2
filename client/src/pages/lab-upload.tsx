@@ -182,9 +182,9 @@ export default function LabUpload() {
 
             {/* File Upload */}
             <Card 
-              className={`cursor-pointer transition-all border-2 ${
+              className={`ui-press cursor-pointer transition-all duration-200 border-2 ${
                 dragActive 
-                  ? 'border-primary bg-primary/5' 
+                  ? 'border-primary bg-primary/5 scale-[1.01]' 
                   : 'border-dashed border-gray-300 hover:border-primary'
               }`}
               onDrop={handleDrop}
@@ -213,7 +213,7 @@ export default function LabUpload() {
             </Card>
 
             {/* Email Import */}
-            <Card className="cursor-pointer hover:shadow-md transition-all border-2 hover:border-primary">
+            <Card className="ui-press cursor-pointer hover:shadow-md transition-all border-2 hover:border-primary">
               <CardContent className="p-6">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">

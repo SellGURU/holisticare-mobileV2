@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
+import { useClientInformationQuery } from "@/hooks/queries";
 import { RookHealthConnect, RookPermissions, RookSamsungHealth } from "capacitor-rook-sdk";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
@@ -200,28 +201,7 @@ export default function Devices() {
   const { toast } = useToast();
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   
-  const [clientInformation, setClientInformation] = useState<{
-    id: string;
-    name: string;
-  }>();
-
-  const handleGetClientInformation = async () => {
-    Application.getClientInformation()
-      .then((res) => {
-        setClientInformation(res.data);
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res?.response?.data?.detail,
-          variant: "destructive",
-        });
-      });
-  };
-
-  useEffect(() => {
-    handleGetClientInformation();
-  }, []);
+  const { data: clientInformation } = useClientInformationQuery();
 
   // Helper function to detect if device is Samsung
   const isSamsungDevice = () => {
@@ -281,6 +261,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
 
   const [devicesData, setDevicesData] = useState<any>(null);
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+  const [devicesLoadError, setDevicesLoadError] = useState(false);
   const [isConnecting, setIsConnecting] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [isConnectingSamsungHealth, setIsConnectingSamsungHealth] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [isSyncingPlatformData, setIsSyncingPlatformData] = useState(false);
@@ -336,6 +317,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
     }
 
     setIsLoadingDevices(true);
+    setDevicesLoadError(false);
     try {
       const res = await Application.rookAuthorizedDataSources({ user_id: clientInformation.id });
       const data = res.data;
@@ -366,7 +348,9 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
         })),
       };
       setDevicesData(mapped);
+      setDevicesLoadError(false);
     } catch (error) {
+      setDevicesLoadError(true);
       console.error("Error fetching devices data:", error);
       toast({
         title: "Error",
@@ -863,6 +847,11 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
       });
   };
 
+  const showDevicesLoading =
+    isLoadingDevices || (!devicesData && !devicesLoadError);
+  const showDevicesContent = Boolean(devicesData);
+  const showDevicesError = !showDevicesLoading && devicesLoadError;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/30 to-teal-50/40 pb-8 dark:from-gray-900 dark:via-emerald-900/20 dark:to-teal-900/10">
       {/* Sticky mobile header */}
@@ -913,7 +902,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
           </div>
         </div>
 
-        {!isLoadingDevices && devicesData && (
+        {showDevicesContent && (
           <Card className="rounded-2xl border-0 bg-white/80 shadow-md dark:bg-gray-800/80">
             <CardContent className="grid grid-cols-2 gap-3 p-4">
               <div className="rounded-xl bg-emerald-50/80 px-3 py-2.5 text-center dark:bg-emerald-900/20">
@@ -945,7 +934,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
           </p>
         </div>
 
-        {isLoadingDevices ? (
+        {showDevicesLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <div
@@ -954,7 +943,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
               />
             ))}
           </div>
-        ) : devicesData ? (
+        ) : showDevicesContent ? (
           <div className="space-y-6">
             {Capacitor.isNativePlatform() && (
               <section>
@@ -1052,7 +1041,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
               )}
             </section>
           </div>
-        ) : (
+        ) : showDevicesError ? (
           <div className="flex flex-col items-center rounded-2xl bg-white/60 px-6 py-12 text-center dark:bg-gray-800/40">
             <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30">
               <Watch className="h-8 w-8 text-emerald-600/70 dark:text-emerald-400/70" />
@@ -1071,7 +1060,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
               Retry
             </Button>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Health permission sheet */}

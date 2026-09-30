@@ -181,7 +181,7 @@ export default function ManualEntry() {
       </div>
 
       <div className="p-4">
-        <Card>
+        <Card className="ui-rise">
           <CardHeader>
             <CardTitle>Add Test Result</CardTitle>
           </CardHeader>

@@ -132,7 +132,11 @@ class AuthService {
     localStorage.removeItem("health_session");
     localStorage.removeItem("health_session_expires");
     localStorage.removeItem("health_device_connection_state");
+    localStorage.removeItem("client_information");
     clearPasswordChangeDefer();
+    void import("@/lib/queryClient").then(({ queryClient }) => {
+      queryClient.clear();
+    });
   }
 
   async login(credentials: LoginCredentials): Promise<AuthUser> {

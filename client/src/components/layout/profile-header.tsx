@@ -17,10 +17,14 @@ import {
   CheckCircle,
   ChevronRight,
   FileText,
+  MessageCircle,
 } from "lucide-react";
 import Auth from "@/api/auth";
 import Application from "@/api/app";
 import NotificationApi from "@/api/notification";
+import { useClientInformationQuery } from "@/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query/keys";
 import {
   Sheet,
   SheetContent,
@@ -30,6 +34,14 @@ import {
   SheetClose,
 } from "../ui/sheet";
 import { publish, subscribe, unsubscribe } from "@/lib/event";
+import {
+  isChatNotification,
+  isQuestionnaireNotification,
+  OPEN_CHAT_ACTION,
+  OPEN_HEALTH_REPORT_ACTION,
+  OPEN_QUESTIONNAIRES_ACTION,
+  resolveNotificationAction,
+} from "@/lib/notificationActions";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 // import logoImage from "@assets/Logo5 2_1753791920091_1757240780580.png";
@@ -43,40 +55,6 @@ type BrandInfo = {
   secondary_color: string;
   tone: string;
   focus_area: string;
-};
-
-type ClientInformation = {
-  action_plan: number;
-  age: number;
-  coach_username: [];
-  connected_wearable: boolean;
-  date_of_birth: string;
-  email: string;
-  id: string;
-  lab_test: number;
-  member_since: string;
-  name: string;
-  pheno_age: number;
-  sex: string;
-  verified_account: boolean;
-  has_changed_password?: boolean;
-};
-
-const OPEN_HEALTH_REPORT_ACTION = "open_health_report";
-
-// The backend sends `action` now; type/title keep older notifications tappable.
-const resolveNotificationAction = (notification: any): string | null => {
-  if (notification?.action) return String(notification.action);
-  const type = String(notification?.notification_type ?? "")
-    .trim()
-    .toLowerCase();
-  if (type === "report_ready" || type === "html_report_ready") {
-    return OPEN_HEALTH_REPORT_ACTION;
-  }
-  const title = String(notification?.title ?? "")
-    .trim()
-    .toLowerCase();
-  return title === "health report ready" ? OPEN_HEALTH_REPORT_ACTION : null;
 };
 
 const readStored = <T,>(key: string): T | undefined => {
@@ -102,25 +80,13 @@ export default function ProfileHeader() {
   const notificationsLoadedRef = useRef(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const [clientInformation, setClientInformation] = useState<
-    ClientInformation | undefined
-  >(() => readStored<ClientInformation>("client_information"));
+  const queryClient = useQueryClient();
+  const { data: clientInformation } = useClientInformationQuery();
 
   const handleGetClientInformation = async () => {
-    Application.getClientInformation()
-      .then((res) => {
-        setClientInformation(res.data);
-        try {
-          localStorage.setItem("client_information", JSON.stringify(res.data));
-        } catch {
-          // ignore storage write failures (private mode, quota, etc.)
-        }
-      })
-      .catch((err) => {
-        // Keep any cached value; don't blank the header on transient errors
-        // (e.g. network not ready right after resuming from background).
-        console.error("Failed to fetch client information", err);
-      });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.clientInformation,
+    });
   };
 
   const handleGetBrandInfo = async () => {
@@ -140,10 +106,6 @@ export default function ProfileHeader() {
         console.error("Failed to fetch brand info", err);
       });
   };
-
-  useEffect(() => {
-    handleGetClientInformation();
-  }, []);
 
   // Refetch user + brand info whenever the app returns to the foreground.
   useEffect(() => {
@@ -222,7 +184,12 @@ export default function ProfileHeader() {
           icon:
             action === OPEN_HEALTH_REPORT_ACTION
               ? FileText
-              : n.type === "lab_result"
+              : action === OPEN_CHAT_ACTION || isChatNotification(n)
+                ? MessageCircle
+              : action === OPEN_QUESTIONNAIRES_ACTION ||
+                  isQuestionnaireNotification(n)
+                ? Calendar
+                : n.type === "lab_result"
               ? Activity
               : n.type === "goal"
               ? Target
@@ -234,12 +201,21 @@ export default function ProfileHeader() {
               ? TrendingUp
               : Activity,
           color:
-            n.color || (action === OPEN_HEALTH_REPORT_ACTION ? "purple" : "blue"),
+            n.color ||
+            (action === OPEN_HEALTH_REPORT_ACTION
+              ? "purple"
+              : action === OPEN_CHAT_ACTION
+                ? "emerald"
+                : "blue"),
         };
       });
       setNotifications(notifData);
       if (notifData.length > 0) {
         setHadNotifications(true);
+      }
+
+      if (notifData.some((n: { action?: string | null; title?: string }) => isQuestionnaireNotification(n))) {
+        publish("questionnairesUpdated", {});
       }
 
       // A report that just landed should show up without a manual refresh.
@@ -266,6 +242,24 @@ export default function ProfileHeader() {
     if (!notification.read_status) {
       markAsRead(notification.id);
     }
+    if (notification.action === OPEN_QUESTIONNAIRES_ACTION) {
+      setShowNotifications(false);
+      publish("questionnairesUpdated", {});
+      if (location === "/") {
+        publish("openQuestionnaires", {});
+      } else {
+        navigate("/?openQuestionnaires=1");
+      }
+      return;
+    }
+    if (notification.action === OPEN_CHAT_ACTION) {
+      setShowNotifications(false);
+      publish("openCoachChat", {});
+      if (location !== "/chat") {
+        navigate("/chat");
+      }
+      return;
+    }
     if (notification.action !== OPEN_HEALTH_REPORT_ACTION) return;
     setShowNotifications(false);
     if (location === "/") {
@@ -277,6 +271,18 @@ export default function ProfileHeader() {
 
   useEffect(() => {
     fetchNotifications();
+  }, []);
+
+  useEffect(() => {
+    const onPush = () => {
+      void fetchNotifications();
+    };
+    subscribe("pushNotificationReceived", onPush);
+    subscribe("pushNotificationAction", onPush);
+    return () => {
+      unsubscribe("pushNotificationReceived", onPush);
+      unsubscribe("pushNotificationAction", onPush);
+    };
   }, []);
   useEffect(() => {
     if (notifications.filter((n) => n.read_status === false).length == 0) {
@@ -405,7 +411,10 @@ export default function ProfileHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200/70 bg-white/90 pt-[calc(env(safe-area-inset-top)+0.5rem)] backdrop-blur-xl dark:border-gray-800/70 dark:bg-gray-950/90">
+    <header
+      data-profile-header
+      className="sticky top-0 z-40 border-b border-gray-200/70 bg-white/90 pt-[calc(env(safe-area-inset-top)+0.5rem)] backdrop-blur-xl dark:border-gray-800/70 dark:bg-gray-950/90"
+    >
       <div className="flex items-center justify-between px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full ring-2 ring-gray-100 dark:ring-gray-800">
@@ -595,6 +604,35 @@ export default function ProfileHeader() {
                                 className="h-7 rounded-full px-2.5 text-xs text-purple-600 hover:bg-purple-100/70 dark:text-purple-400 dark:hover:bg-purple-900/30"
                               >
                                 View report
+                                <ChevronRight className="ml-1 h-3 w-3" />
+                              </Button>
+                            )}
+                            {notification.action ===
+                              OPEN_QUESTIONNAIRES_ACTION && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openNotification(notification);
+                                }}
+                                className="h-7 rounded-full px-2.5 text-xs text-teal-700 hover:bg-teal-100/70 dark:text-teal-300 dark:hover:bg-teal-900/30"
+                              >
+                                Open questionnaires
+                                <ChevronRight className="ml-1 h-3 w-3" />
+                              </Button>
+                            )}
+                            {notification.action === OPEN_CHAT_ACTION && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openNotification(notification);
+                                }}
+                                className="h-7 rounded-full px-2.5 text-xs text-emerald-700 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                              >
+                                Open chat
                                 <ChevronRight className="ml-1 h-3 w-3" />
                               </Button>
                             )}

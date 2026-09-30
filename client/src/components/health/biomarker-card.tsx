@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getBiomarkerStatus, getBiomarkerStatusColor, getBiomarkerStatusBg, cn } from "@/lib/utils";
+import { formatLabCalendarDate } from "@/lib/labCalendarDate";
 
 interface BiomarkerCardProps {
   name: string;
@@ -104,7 +105,7 @@ export default function BiomarkerCard({
         {testDate && (
           <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              Tested: {new Date(testDate).toLocaleDateString()}
+              Tested: {formatLabCalendarDate(testDate)}
             </span>
           </div>
         )}

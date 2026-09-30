@@ -15,6 +15,7 @@ import { formatRelativeDate } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import HealthScoreCard from "@/components/health/health-score-card";
 import BiomarkerCard from "@/components/health/biomarker-card";
+import IntelligenceSection from "@/components/intelligence/IntelligenceSection";
 import { Upload, Edit, TrendingUp, CheckSquare, Brain, Plus, Activity, Calendar, Target, Trophy, Heart, Zap } from "lucide-react";
 import { Link } from "wouter";
 
@@ -157,6 +158,8 @@ export default function Dashboard() {
       </div>
 
       <div className="p-4 space-y-6">
+        <IntelligenceSection />
+
         {/* Health Score Card - Redesigned */}
         <Card className="bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 text-white border-0 shadow-xl">
           <CardContent className="p-6">

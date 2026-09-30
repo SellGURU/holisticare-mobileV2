@@ -20,13 +20,22 @@ import OfflineBanner from "@/components/OfflineBanner";
 import { usePushNotifications } from "@/hooks/use-pushNotification";
 import NotificationApi from "@/api/notification";
 import { publish, subscribe, unsubscribe } from "@/lib/event";
+import {
+  isChatPushEvent,
+  isQuestionnairePushEvent,
+  OPEN_HEALTH_REPORT_ACTION,
+  OPEN_QUESTIONNAIRES_ACTION,
+} from "@/lib/notificationActions";
 import { Capacitor } from "@capacitor/core";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query/keys";
 interface MobileLayoutProps {
   children: ReactNode;
 }
 
 export default function MobileLayout({ children }:MobileLayoutProps ) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [location, navigate] = useLocation();
   const [showSearch, setShowSearch] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -60,12 +69,49 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
     getBrandInfo();
   }, []);
 
-  // Push notifications about a finished report open (or refresh) the report card
+  // Push: deep-link actions and refresh in-app lists without tab switching.
   useEffect(() => {
-    const isReportPush = (event: any) =>
-      String(event?.detail?.data?.type ?? "") === "report_ready";
+    const isReportPush = (event: any) => {
+      const type = String(event?.detail?.data?.type ?? "").toLowerCase();
+      const action = String(event?.detail?.data?.action ?? "");
+      return (
+        type === "report_ready" ||
+        type === "html_report_ready" ||
+        action === OPEN_HEALTH_REPORT_ACTION
+      );
+    };
+
+    const openQuestionnaires = () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.assignedQuestionnaires,
+      });
+      publish("questionnairesUpdated", {});
+      if (location === "/") {
+        publish("openQuestionnaires", {});
+      } else {
+        navigate("/?openQuestionnaires=1");
+      }
+    };
+
+    const openCoachChat = () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.chatMessages("coach"),
+      });
+      publish("openCoachChat", {});
+      if (location !== "/chat") {
+        navigate("/chat");
+      }
+    };
 
     const handleActionPerformed = (event: any) => {
+      if (isQuestionnairePushEvent(event)) {
+        openQuestionnaires();
+        return;
+      }
+      if (isChatPushEvent(event)) {
+        openCoachChat();
+        return;
+      }
       if (!isReportPush(event)) return;
       if (location === "/") {
         publish("openHealthReport", {});
@@ -74,7 +120,24 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
       }
     };
     const handleReceived = (event: any) => {
+      if (isQuestionnairePushEvent(event)) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.assignedQuestionnaires,
+        });
+        publish("questionnairesUpdated", {});
+        return;
+      }
+      if (isChatPushEvent(event)) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.chatMessages("coach"),
+        });
+        return;
+      }
       if (!isReportPush(event)) return;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.htmlReport });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.holisticPlanActionPlan,
+      });
       publish("healthReportUpdated", {});
     };
 
@@ -85,7 +148,7 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
       unsubscribe("pushNotificationAction", handleActionPerformed);
       unsubscribe("pushNotificationReceived", handleReceived);
     };
-  }, [location, navigate]);
+  }, [location, navigate, queryClient]);
 
   // Reset scroll position whenever the route changes so each page starts at top
   useEffect(() => {
@@ -174,7 +237,12 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
         }`}
       >
         {useProfileHeader ? (
-          children
+          <div
+            key={location}
+            className={location === "/chat" ? "h-full" : "ui-page-in"}
+          >
+            {children}
+          </div>
         ) : (
           <main className="p-4">
             {children}
