@@ -51,6 +51,11 @@ import {
   formatChatDayLabel,
   isSameChatDay,
 } from "@/lib/chatMessageOrder";
+import {
+  chatFeedbackPayload,
+  reactionsFromMessages,
+  type ChatReaction,
+} from "@/lib/chatFeedback";
 import { subscribe, unsubscribe } from "@/lib/event";
 import { AppContext } from "@/store/app";
 type ChatReference = { text: string; filename: string; url?: string };
@@ -182,7 +187,7 @@ export default function ChatPage() {
     null,
   );
   const [messageReactions, setMessageReactions] = useState<
-    Record<number, "liked" | "disliked" | null>
+    Record<number, ChatReaction>
   >({});
   const [reportedMessages, setReportedMessages] = useState<Set<string>>(
     new Set()
@@ -245,19 +250,13 @@ export default function ChatPage() {
     setMessages(nextMessages);
     setConversationId(payload.conversation_id);
 
-    const feedbackState: Record<number, "liked" | "disliked" | null> = {};
     const reportedMessagesSet = new Set<string>();
     nextMessages.forEach((msg: Message) => {
-      if (msg.feedback === "like") {
-        feedbackState[msg.conversation_id] = "liked";
-      } else if (msg.feedback === "disliked") {
-        feedbackState[msg.conversation_id] = "disliked";
-      }
       if (msg.reported) {
         reportedMessagesSet.add(`${msg.conversation_id}-${msg.date}-${msg.time}`);
       }
     });
-    setMessageReactions(feedbackState);
+    setMessageReactions(reactionsFromMessages(nextMessages));
     setReportedMessages(reportedMessagesSet);
   };
 
@@ -372,21 +371,31 @@ export default function ChatPage() {
 
   const handleMessageReaction = (
     conversationId: number,
-    reaction: "liked" | "disliked" | null
+    reaction: ChatReaction
   ) => {
+    const nextReaction =
+      messageReactions[conversationId] === reaction ? null : reaction;
     setMessageReactions((prev) => ({
       ...prev,
-      [conversationId]: prev[conversationId] === reaction ? null : reaction,
+      [conversationId]: nextReaction,
+    }));
+    patchChatMessages((prev) => ({
+      conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+      messages: (prev?.messages ?? []).map((msg: Message) =>
+        msg.conversation_id === conversationId
+          ? { ...msg, feedback: chatFeedbackPayload(nextReaction) }
+          : msg,
+      ),
     }));
 
-    // Show toast feedback
-    if (reaction === "liked") {
+    const payload = chatFeedbackPayload(nextReaction);
+    if (payload === "like") {
       toast({
         title: "Thanks for the feedback!",
         description: "We're glad this response was helpful.",
       });
       Application.feeedBack("like", conversationId);
-    } else if (reaction === "disliked") {
+    } else if (payload === "dislike") {
       toast({
         title: "Feedback received",
         description: "We'll work to improve our responses.",
@@ -744,9 +753,20 @@ export default function ChatPage() {
             const showDayLabel = Boolean(dayLabel) && !sameDayAsPrev;
 
             return (
-              <div key={`${messageKey}-${msgIndex}`}>
+              <div
+                key={`${messageKey}-${msgIndex}`}
+                className={
+                  stacked
+                    ? "mt-2"
+                    : showDayLabel
+                      ? "mt-3"
+                      : msgIndex === 0
+                        ? "mt-0"
+                        : "mt-3.5"
+                }
+              >
               {showDayLabel && (
-                <div className="mb-3 mt-3 flex justify-center first:mt-1">
+                <div className="mb-3 flex justify-center">
                   <span className="rounded-full bg-black/5 px-3 py-1 text-[11px] font-medium text-gray-500 dark:bg-white/10 dark:text-gray-400">
                     {dayLabel}
                   </span>
@@ -756,8 +776,8 @@ export default function ChatPage() {
                 className={`flex items-end gap-1.5 ${
                   isPatient ? "justify-end" : "justify-start"
                 } ${isReported ? "opacity-50" : ""} ${
-                  stacked ? "mt-2" : showDayLabel ? "mt-0" : "mt-3.5 first:mt-0"
-                } ${msgIndex === messages.length - 1 ? "ui-bubble-in" : ""}`}
+                  msgIndex === messages.length - 1 ? "ui-bubble-in" : ""
+                }`}
               >
                 <div
                   className={`group min-w-0 ${
@@ -779,7 +799,7 @@ export default function ChatPage() {
                           }`
                     }`}
                   >
-                    <div className="text-[14.5px] leading-[1.45] break-words [overflow-wrap:anywhere]">
+                    <div className="whitespace-pre-wrap break-words text-[14.5px] leading-[1.45] [overflow-wrap:break-word]">
                       {isAI
                         ? formatText(aiBody)
                         : formatText(msg.message_text, false)}

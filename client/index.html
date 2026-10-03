@@ -26,6 +26,21 @@
         -moz-osx-font-smoothing: grayscale;
       }
     </style>
+    <script>
+      try {
+        var brand = JSON.parse(localStorage.getItem("brand_info") || "null");
+        if (brand && brand.primary_color) {
+          document.documentElement.style.setProperty(
+            "--brand-primary",
+            brand.primary_color
+          );
+          document.documentElement.style.setProperty(
+            "--brand-secondary",
+            brand.secondary_color || brand.primary_color
+          );
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

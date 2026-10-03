@@ -18,9 +18,12 @@ import { createPortal } from "react-dom";
 import TaskDetailSheet from "./plan/TaskDetailSheet";
 import TaskGroupList from "./plan/TaskGroupList";
 import {
-  activityExercises,
+  activityTaskIds,
   getTaskCompletionRate,
   isTaskCompleted,
+  mapTodayTaskStatus,
+  mapWeeklyTaskStatus,
+  mergePlanTasks,
   remainingByCategory,
   todayKey,
   type Task,
@@ -38,86 +41,37 @@ export default function Plan() {
   const [activeCheckin, setActiveCheckin] = useState<Task | null>(null);
   const [weeklyTasks, setWeeklyTasks] = useState<WeeklyTask[]>([]);
   const dateScrollRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const patchPlanCaches = (
+    taskId: string,
+    status: boolean,
+    value?: number,
+  ) => {
+    queryClient.setQueryData(queryKeys.todayTasks, (prev: Task[] | undefined) =>
+      mapTodayTaskStatus(prev, taskId, status, value),
+    );
+    queryClient.setQueryData(
+      queryKeys.weeklyTasks,
+      (prev: WeeklyTask[] | undefined) =>
+        mapWeeklyTaskStatus(prev, taskId, status, value),
+    );
+  };
 
   const handleUpdateTaskStatus = (
     taskId: string,
     status: boolean,
     value?: number
   ) => {
-    setTodaysTasks((prev) =>
-      prev.map((task) =>
-        task.task_id === taskId
-          ? { ...task, Status: status, Temp_value: value }
-          : task
-      )
+    patchPlanCaches(taskId, status, value);
+    setTodaysTasks(
+      (prev) => mapTodayTaskStatus(prev, taskId, status, value) ?? prev,
     );
-  };
-  const handleUpdateExerciseTaskStatus = (
-    exerciseId: string,
-    status: boolean
-  ) => {
-    setTodaysTasks((prev) =>
-      prev.map((task) =>
-        task.Sections?.some((section) =>
-          section.Exercises?.some((e) => e.task_id === exerciseId)
-        )
-          ? {
-              ...task,
-              Sections: task.Sections?.map((section) => ({
-                ...section,
-                Exercises: section.Exercises?.map((e) =>
-                  e.task_id === exerciseId ? { ...e, Status: status } : e
-                ),
-              })),
-            }
-          : task
-      )
+    setWeeklyTasks(
+      (prev) => mapWeeklyTaskStatus(prev, taskId, status, value) ?? prev,
     );
   };
 
-  const handleUpdateWeeklyTaskStatus = (taskId: string, status: boolean) => {
-    setWeeklyTasks((prev) =>
-      prev.map((task) =>
-        task.tasks.find((t) => t.task_id === taskId)
-          ? {
-              ...task,
-              tasks: task.tasks.map((t) =>
-                t.task_id === taskId ? { ...t, Status: status } : t
-              ),
-            }
-          : task
-      )
-    );
-  };
-  const handleUpdateWeeklyExerciseTaskStatus = (
-    taskId: string,
-    status: boolean
-  ) => {
-    setWeeklyTasks((prev) =>
-      prev.map((task) =>
-        task.tasks?.some((t) =>
-          t.Sections?.some((section) =>
-            section.Exercises?.some((e) => e.task_id === taskId)
-          )
-        )
-          ? {
-              ...task,
-              tasks: task.tasks.map((t) => ({
-                ...t,
-                Sections: t.Sections?.map((section) => ({
-                  ...section,
-                  Exercises: section.Exercises?.map((e) =>
-                    e.task_id === taskId ? { ...e, Status: status } : e
-                  ),
-                })),
-              })),
-            }
-          : task
-      )
-    );
-  };
-
-  const queryClient = useQueryClient();
   const { toast } = useToast();
   const todayQuery = useTodayTasksQuery(activeTab === "today");
   const weeklyQuery = useWeeklyTasksQuery(activeTab === "calendar");
@@ -129,7 +83,7 @@ export default function Plan() {
   useEffect(() => {
     if (!todayQuery.data) return;
     const tasks = todayQuery.data as Task[];
-    setTodaysTasks(tasks);
+    setTodaysTasks((prev) => mergePlanTasks(tasks, prev));
     const initialValues: Record<string, number> = {};
     tasks.forEach((task: Task) => {
       initialValues[task.task_id] = task.Temp_value ?? 0;
@@ -138,9 +92,17 @@ export default function Plan() {
   }, [todayQuery.data]);
 
   useEffect(() => {
-    if (weeklyQuery.data) {
-      setWeeklyTasks(weeklyQuery.data as WeeklyTask[]);
-    }
+    if (!weeklyQuery.data) return;
+    const days = weeklyQuery.data as WeeklyTask[];
+    setWeeklyTasks((prev) =>
+      days.map((day) => {
+        const localDay = prev.find((item) => item.date === day.date);
+        return {
+          ...day,
+          tasks: mergePlanTasks(day.tasks, localDay?.tasks ?? []),
+        };
+      }),
+    );
   }, [weeklyQuery.data]);
 
   useEffect(() => {
@@ -179,44 +141,51 @@ export default function Plan() {
     };
   }, [activeCheckin]);
 
-  const invalidatePlanTasks = () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.todayTasks });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.weeklyTasks });
+  const persistTaskStatus = (
+    taskId: string,
+    nextStatus: boolean,
+    previousStatus: boolean,
+    value?: number,
+    extraIds: string[] = [],
+  ) => {
+    const taskIds = [...new Set([taskId, ...extraIds].filter(Boolean))];
+    taskIds.forEach((id) => handleUpdateTaskStatus(id, nextStatus, value));
+    Promise.allSettled(
+      taskIds.map((id) =>
+        nextStatus
+          ? Application.checkTask({ task_id: id })
+          : Application.uncheckTask({ task_id: id }),
+      ),
+    ).then((results) => {
+      const failed = results.find((result) => result.status === "rejected");
+      const succeeded = results.some((result) => result.status === "fulfilled");
+      if (!succeeded && failed && failed.status === "rejected") {
+        taskIds.forEach((id) =>
+          handleUpdateTaskStatus(id, previousStatus, value),
+        );
+        const res = failed.reason;
+        toast({
+          title: "Error",
+          description:
+            res?.response?.data?.detail || "Could not update the task.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: nextStatus ? "Task Checked" : "Task Unchecked",
+        description: nextStatus
+          ? "Your task has been checked."
+          : "Your task has been unchecked.",
+      });
+    });
   };
 
   const handleCheckTask = (taskId: string) => {
-    Application.checkTask({ task_id: taskId })
-      .then(() => {
-        toast({
-          title: "Task Checked",
-          description: "Your task has been checked.",
-        });
-        invalidatePlanTasks();
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res.response.data.detail,
-          variant: "destructive",
-        });
-      });
+    persistTaskStatus(taskId, true, false);
   };
   const handleUncheckTask = (taskId: string) => {
-    Application.uncheckTask({ task_id: taskId })
-      .then(() => {
-        toast({
-          title: "Task Unchecked",
-          description: "Your task has been unchecked.",
-        });
-        invalidatePlanTasks();
-      })
-      .catch((res) => {
-        toast({
-          title: "Error",
-          description: res.response.data.detail,
-          variant: "destructive",
-        });
-      });
+    persistTaskStatus(taskId, false, true);
   };
 
   const handleUpdateValue = (taskId: string, value: number) => {
@@ -226,7 +195,6 @@ export default function Plan() {
           title: "Value Updated",
           description: "Your value has been updated.",
         });
-        invalidatePlanTasks();
       })
       .catch((res) => {
         toast({
@@ -276,55 +244,9 @@ export default function Plan() {
     if (!isCurrentDay) return;
 
     if (task.Category === "Activity") {
-      const exerciseIds = activityExercises(task)
-        .map((exercise) => exercise.task_id)
-        .filter(Boolean);
-      const ids = exerciseIds.length
-        ? exerciseIds
-        : task.task_id
-          ? [task.task_id]
-          : [];
-      if (!ids.length) return;
-
-      const nextStatus = !completed;
-      ids.forEach((id) => {
-        if (exerciseIds.includes(id)) {
-          if (activeTab === "today") {
-            handleUpdateExerciseTaskStatus(id, nextStatus);
-          } else {
-            handleUpdateWeeklyExerciseTaskStatus(id, nextStatus);
-          }
-        } else {
-          handleUpdateTaskStatus(id, nextStatus);
-          if (activeTab === "calendar") {
-            handleUpdateWeeklyTaskStatus(id, nextStatus);
-          }
-        }
-      });
-
-      Promise.all(
-        ids.map((id) =>
-          nextStatus
-            ? Application.checkTask({ task_id: id })
-            : Application.uncheckTask({ task_id: id })
-        )
-      )
-        .then(() => {
-          toast({
-            title: nextStatus ? "Task Checked" : "Task Unchecked",
-            description: nextStatus
-              ? "Your task has been checked."
-              : "Your task has been unchecked.",
-          });
-          invalidatePlanTasks();
-        })
-        .catch((res) => {
-          toast({
-            title: "Error",
-            description: res.response?.data?.detail || "Could not update the task.",
-            variant: "destructive",
-          });
-        });
+      const taskIds = activityTaskIds(task);
+      if (!taskIds.length) return;
+      persistTaskStatus(taskIds[0], !completed, completed, undefined, taskIds.slice(1));
       return;
     }
 
@@ -334,15 +256,10 @@ export default function Plan() {
 
     const updateStatus = (id: string, status: boolean, value?: number) => {
       handleUpdateTaskStatus(id, status, value);
-      if (activeTab === "calendar") {
-        handleUpdateWeeklyTaskStatus(id, status);
-      }
     };
 
     if (!isLifestyle) {
-      updateStatus(task.task_id, !task.Status, currentValue);
-      if (completed) handleUncheckTask(task.task_id);
-      else handleCheckTask(task.task_id);
+      persistTaskStatus(task.task_id, !completed, completed, currentValue);
     } else {
       handleUpdateValue(task.task_id, currentValue);
       if (valueMatchesTarget) {

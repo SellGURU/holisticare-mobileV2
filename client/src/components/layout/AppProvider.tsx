@@ -1,22 +1,34 @@
 import Application from "@/api/app";
 import {
+  applyBrandCssVars,
+  brandInfoChanged,
+  readCachedBrandInfo,
+  writeCachedBrandInfo,
+} from "@/lib/brandCache";
+import {
   AppContext,
   DEFAULT_CHAT_MODE,
   type ChatMode,
 } from "@/store/app";
 import { useEffect, useState } from "react";
 
+const EMPTY_BRAND = {
+  last_update: "",
+  logo: "",
+  name: "",
+  headline: "",
+  primary_color: "",
+  secondary_color: "",
+  tone: "",
+  focus_area: "",
+};
+
 function AppProvider({ children }: { children: React.ReactNode }) {
-  const [brandInfo, setBrandInfo] = useState<{
-    last_update: string;
-    logo: string;
-    name: string;
-    headline: string;
-    primary_color: string;
-    secondary_color: string;
-    tone: string;
-    focus_area: string;
-  }>();
+  const [brandInfo, setBrandInfo] = useState(() => {
+    const cached = readCachedBrandInfo();
+    if (cached) applyBrandCssVars(cached);
+    return cached;
+  });
   const [wellnessScore, setWellnessScore] = useState({
     scores: [] as Array<{ name?: string; score?: number | string | null }>,
     latest_date: null as string | null,
@@ -26,7 +38,16 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     Application.getBrandInfo()
       .then((res: any) => {
-        setBrandInfo(res.data.brand_elements);
+        const next = res.data?.brand_elements;
+        if (!next) return;
+        setBrandInfo((prev) => {
+          if (!brandInfoChanged(prev, next)) {
+            return prev ?? next;
+          }
+          writeCachedBrandInfo(next);
+          applyBrandCssVars(next);
+          return next;
+        });
       })
       .catch(() => {});
 
@@ -46,16 +67,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        brandInfo: brandInfo || {
-          last_update: "",
-          logo: "",
-          name: "",
-          headline: "",
-          primary_color: "",
-          secondary_color: "",
-          tone: "",
-          focus_area: "",
-        },
+        brandInfo: brandInfo || EMPTY_BRAND,
         wellnessScore: wellnessScore,
         chatMode,
         setChatMode,

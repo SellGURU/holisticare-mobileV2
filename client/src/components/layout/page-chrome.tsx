@@ -1,10 +1,14 @@
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  DEFAULT_BRAND_COLOR,
+  resolveBrandColors,
+} from "@/lib/brandCache";
 import { cn } from "@/lib/utils";
 import { AppContext } from "@/store/app";
 import type { LucideIcon } from "lucide-react";
 import { useContext, type ReactNode } from "react";
 
-export const DEFAULT_BRAND_COLOR = "#10b981";
+export { DEFAULT_BRAND_COLOR };
 
 export const PAGE_SHELL =
   "min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 pb-[calc(var(--nav-height)+1rem)] dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20";
@@ -29,8 +33,7 @@ export function hexToRgba(hex: string, alpha: number) {
 
 export function useBrandColors() {
   const { brandInfo } = useContext(AppContext);
-  const primary = brandInfo?.primary_color || DEFAULT_BRAND_COLOR;
-  const secondary = brandInfo?.secondary_color || primary;
+  const { primary, secondary } = resolveBrandColors(brandInfo);
   return { primary, secondary, brandInfo };
 }
 
@@ -135,6 +138,7 @@ interface BrandWashCardProps {
   percent?: number;
   className?: string;
   contentClassName?: string;
+  id?: string;
 }
 
 export function BrandWashCard({
@@ -142,12 +146,14 @@ export function BrandWashCard({
   percent = 0,
   className,
   contentClassName,
+  id,
 }: BrandWashCardProps) {
   const { primary, secondary } = useBrandColors();
   const fill = Math.min(Math.max(percent, 0), 100);
 
   return (
     <Card
+      id={id}
       className={cn(
         "relative overflow-hidden rounded-2xl border-0 bg-white/80 shadow-md dark:bg-gray-800/80",
         className

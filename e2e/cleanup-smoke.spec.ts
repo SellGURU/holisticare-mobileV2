@@ -89,6 +89,37 @@ test.describe('Mobile-web cleanup smoke (Vite-only, offline mocks)', () => {
     await expect(page).toHaveURL(/\/chat/);
   });
 
+  test('M4b: You shows Deep Analysis hero before Plan', async ({ page }) => {
+    await login(page);
+    await expect(page.locator('[data-bottom-nav]')).toBeVisible({
+      timeout: 20_000,
+    });
+    await clickBottomNav(page, '/you');
+    await expect(page).toHaveURL(/\/you/);
+
+    const deep = page.locator('#deep-analysis-section');
+    const plan = page.locator('#your-plan-section');
+    await expect(deep).toBeVisible({ timeout: 20_000 });
+    await expect(plan).toBeVisible();
+
+    const deepBox = await deep.boundingBox();
+    const planBox = await plan.boundingBox();
+    expect(deepBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      planBox?.y ?? Number.NEGATIVE_INFINITY,
+    );
+
+    await expect(deep.getByText('Latest report')).toBeVisible();
+    await expect(deep.getByRole('heading', { name: 'Deep Analysis' })).toBeVisible();
+    await expect(deep.getByText(/Generated Oct 1, 2026/)).toBeVisible();
+    await expect(deep.getByText('Personalized interventions')).toBeVisible();
+    await expect(deep.getByText('2', { exact: true })).toBeVisible();
+    await expect(deep.getByText('Ready to view')).toBeVisible();
+    await expect(deep.locator('#view-pdf-report-Box')).toBeVisible();
+    await expect(deep.locator('#download-pdf-report-Box')).toBeVisible();
+    await expect(deep.getByRole('button', { name: 'View report' })).toBeEnabled();
+    await expect(deep.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+  });
+
   test('M6: chat header and bottom nav stay in sync', async ({ page }) => {
     await login(page);
     await expect(page).toHaveURL(/\/chat/, { timeout: 20_000 });

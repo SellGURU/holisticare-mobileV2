@@ -158,12 +158,103 @@ export function collectActivityFiles(task: Task): Exercise["Files"] {
 
 export function isTaskCompleted(task: Task): boolean {
   if (task.Category === "Activity") {
+    if (task.Status) return true;
     const exercises = activityExercises(task);
     if (exercises.length > 0) {
       return exercises.every((exercise) => exercise.Status);
     }
   }
   return Boolean(task.Status);
+}
+
+export function taskMatchesId(task: Task, taskId: string): boolean {
+  return (
+    task.task_id === taskId ||
+    activityExercises(task).some((exercise) => exercise.task_id === taskId)
+  );
+}
+
+export function activityTaskIds(task: Task): string[] {
+  const ids = [task.task_id, ...activityExercises(task).map((exercise) => exercise.task_id)]
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+  return [...new Set(ids)];
+}
+
+export function withTaskStatus<T extends Task>(
+  task: T,
+  status: boolean,
+  value?: number,
+): T {
+  return {
+    ...task,
+    Status: status,
+    Updated_at: new Date().toISOString(),
+    ...(value !== undefined ? { Temp_value: value } : {}),
+    Sections: task.Sections?.map((section) => ({
+      ...section,
+      Exercises: section.Exercises?.map((exercise) => ({
+        ...exercise,
+        Status: status,
+      })),
+    })),
+  };
+}
+
+export function mapTodayTaskStatus(
+  tasks: Task[] | undefined,
+  taskId: string,
+  status: boolean,
+  value?: number,
+): Task[] | undefined {
+  if (!Array.isArray(tasks)) return tasks;
+  return tasks.map((task) =>
+    taskMatchesId(task, taskId) ? withTaskStatus(task, status, value) : task,
+  );
+}
+
+export function mapWeeklyTaskStatus(
+  days: WeeklyTask[] | undefined,
+  taskId: string,
+  status: boolean,
+  value?: number,
+): WeeklyTask[] | undefined {
+  if (!Array.isArray(days)) return days;
+  return days.map((day) => ({
+    ...day,
+    tasks: day.tasks.map((task) =>
+      taskMatchesId(task, taskId) ? withTaskStatus(task, status, value) : task,
+    ),
+  }));
+}
+
+function taskStamp(task: Task): number {
+  const parsed = Date.parse(task.Updated_at || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function mergePlanTasks(server: Task[], local: Task[]): Task[] {
+  if (!local.length) return server;
+  const localById = new Map(local.map((task) => [task.task_id, task]));
+  return server.map((task) => {
+    const cached = localById.get(task.task_id);
+    if (!cached) return task;
+    const localDone = isTaskCompleted(cached);
+    const serverDone = isTaskCompleted(task);
+    if (localDone === serverDone) return task;
+    const localIsNewer = taskStamp(cached) >= taskStamp(task);
+    // Activity refetch can bump Updated_at while overlay still reports incomplete.
+    if (localIsNewer || (localDone && !serverDone)) {
+      return {
+        ...task,
+        Status: cached.Status,
+        Sections: cached.Sections ?? task.Sections,
+        Updated_at: cached.Updated_at,
+        Temp_value: cached.Temp_value ?? task.Temp_value,
+      };
+    }
+    return task;
+  });
 }
 
 export function asStringList(value?: string[] | string | null) {

@@ -34,6 +34,17 @@ export const FIXTURE_BRAND = {
 
 export const FIXTURE_TASK_TITLE = 'Cleanup Fixture Walk';
 
+export const FIXTURE_DEEP_ANALYSIS = {
+  latest_deep_analysis: '2026-10-01T12:00:00.000Z',
+  num_of_interventions: 2,
+  progress: 40,
+};
+
+export const FIXTURE_HTML_REPORT = {
+  html: 'https://example.com/reports/deep-analysis.html',
+  pdf: 'https://example.com/reports/deep-analysis.pdf',
+};
+
 function fixtureChatMessages() {
   const yesterday = new Date();
   yesterday.setHours(18, 0, 0, 0);
@@ -178,8 +189,12 @@ async function handleApi(route: Route) {
     return json(route, FIXTURE_BRAND);
   }
 
+  if (path.includes('/mobile/holistic_plan_action_plan')) {
+    return json(route, FIXTURE_DEEP_ANALYSIS);
+  }
+
   if (path.includes('/mobile/get_html_report')) {
-    return json(route, { html: null, available: false });
+    return json(route, FIXTURE_HTML_REPORT);
   }
 
   if (path.includes('get_messages_id')) {

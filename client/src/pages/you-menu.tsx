@@ -1,6 +1,9 @@
 import Application from "@/api/app";
 import { isPrivateHttpUrl } from "@/api/base";
-import { PAGE_SHELL } from "@/components/layout/page-chrome";
+import {
+  PAGE_SHELL,
+  useBrandColors,
+} from "@/components/layout/page-chrome";
 import QuestionnairePlayer from "@/components/questionnaire/QuestionnairePlayer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +17,7 @@ import {
   isPhenotypicAgeMetric,
   resolveCalendarAge,
 } from "@/components/intelligence/intelligenceDisplay";
+import { DeepAnalysisCard } from "@/components/youMenu/DeepAnalysisCard";
 import PhenoAgeHighlightCard from "@/components/youMenu/PhenoAgeHighlightCard";
 import { useIntelligenceSummary } from "@/hooks/useIntelligenceSummary";
 import {
@@ -62,7 +66,6 @@ import {
   Droplets,
   Flame,
   Heart,
-  Loader2,
   Moon,
   Pill,
   Plus,
@@ -294,6 +297,7 @@ function formatTime(timeValue: string | number | null | undefined): string {
 
 export default function YouMenu() {
   const { brandInfo, wellnessScore } = useContext(AppContext);
+  const { primary: brandPrimary } = useBrandColors();
   const wellnessMetricCards = useMemo(
     () => buildWellnessMetricCards(wellnessScore?.scores),
     [wellnessScore?.scores],
@@ -981,10 +985,27 @@ export default function YouMenu() {
             </div>
           </CardContent>
         </Card>
-      )}
+        )}
 
-      {/* Your Plan */}
-      <Card
+        <DeepAnalysisCard
+          isLoading={
+            checkingHtmlReport || (planPending && holisticPlanData === undefined)
+          }
+          hasHealthData={hasHealthData}
+          latestDeepAnalysis={holisticPlanActionPlan.latest_deep_analysis}
+          hasHtmlReport={hasHtmlReport}
+          htmlReportDetail={htmlReportDetail}
+          interventionCount={holisticPlanActionPlan.num_of_interventions}
+          brandPrimary={brandPrimary}
+          isViewing={loadingViewHtmlReport}
+          isDownloading={loadingHtmlReport}
+          onView={handleViewHtmlReport}
+          onDownload={handleGetHtmlReport}
+        />
+
+        {/* Your Plan */}
+        <Card
+        id="your-plan-section"
         className={`overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90 ${
           hasHealthData ? "cursor-pointer transition-all active:scale-[0.99]" : ""
         }`}
@@ -1303,104 +1324,6 @@ export default function YouMenu() {
             </div>
           ) : (
             <CategoryCards data={biomarkersData as Biomarker[]} />
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Deep Analysis */}
-      <Card
-        id="deep-analysis-section"
-        className="overflow-hidden border border-gray-200/60 bg-white/90 shadow-sm dark:border-gray-700/50 dark:bg-gray-900/90"
-      >
-        <CardContent className="p-4">
-          {checkingHtmlReport || (planPending && holisticPlanData === undefined) ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
-            </div>
-          ) : !hasHealthData ||
-            !holisticPlanActionPlan.latest_deep_analysis ||
-            !hasHtmlReport ? (
-            <div className="flex flex-col items-center px-2 py-4 text-center">
-              <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-50 dark:bg-purple-950/40">
-                <Brain className="h-7 w-7 text-purple-600 dark:text-purple-400" />
-              </span>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {!hasHealthData || !holisticPlanActionPlan.latest_deep_analysis
-                  ? "No Deep Analysis Yet"
-                  : "Report Not Ready Yet"}
-              </h4>
-              <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                {!hasHealthData || !holisticPlanActionPlan.latest_deep_analysis
-                  ? "Add health data to generate your first personalized deep analysis."
-                  : htmlReportDetail ||
-                    "Your deep analysis exists, but the downloadable report is not available yet."}
-              </p>
-            </div>
-          ) : (
-            <div>
-              <div className="mb-3 flex items-start gap-3">
-                <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 shadow-sm">
-                  <Brain className="h-5 w-5 text-white" />
-                </span>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Latest Deep Analysis
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Generated{" "}
-                    {holisticPlanActionPlan.latest_deep_analysis.split("T")[0]}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-4 flex items-center gap-2 rounded-xl bg-blue-50/80 px-3 py-2 dark:bg-blue-950/30">
-                <CheckCircle className="h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-                <span className="text-xs text-gray-700 dark:text-gray-300">
-                  {`${holisticPlanActionPlan.num_of_interventions} personalized interventions`}
-                </span>
-              </div>
-
-              <div className="flex gap-2">
-                  <Button
-                    id="download-pdf-report-Box"
-                    className="h-10 flex-1 rounded-xl text-sm font-medium text-white shadow-sm"
-                    style={{
-                      background: brandInfo?.primary_color ?? "#10b981",
-                      color: brandInfo
-                        ? isColorDark(brandInfo.primary_color || "#000000")
-                          ? "white"
-                          : "black"
-                        : "white",
-                    }}
-                    onClick={handleGetHtmlReport}
-                  >
-                    {loadingHtmlReport ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Download"
-                    )}
-                  </Button>
-                  <Button
-                    id="view-pdf-report-Box"
-                    className="h-10 flex-1 rounded-xl text-sm font-medium text-white shadow-sm"
-                    style={{
-                      background: brandInfo?.secondary_color ?? "#8b5cf6",
-                      color: brandInfo
-                        ? isColorDark(brandInfo.secondary_color || "#000000")
-                          ? "white"
-                          : "black"
-                        : "white",
-                    }}
-                    onClick={handleViewHtmlReport}
-                  >
-                    {loadingViewHtmlReport ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "View"
-                    )}
-                  </Button>
-              </div>
-            </div>
           )}
         </CardContent>
       </Card>
