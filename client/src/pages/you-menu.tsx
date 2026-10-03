@@ -38,7 +38,6 @@ import { useToast } from "@/hooks/use-toast";
 import { openExternalUrl } from "@/lib/open-external-url";
 import { rewriteHolisticPlanResourceLinks } from "@/lib/patientResourceLinks";
 import { reserveWebPdfWindow, savePdfBlob } from "@/lib/save-pdf-native";
-import { scrollElementInMainContainer, resetOuterAppScroll } from "@/lib/scrollIntoMainContainer";
 import {
   sanitizeWellnessReportDisclaimer,
   wrapHeroTitleWithBrand,
@@ -430,29 +429,21 @@ export default function YouMenu() {
     syncSummaries();
   }, []);
 
-  const scrollToDeepAnalysis = (delay = 600) => {
-    setTimeout(() => {
-      const element =
-        document.getElementById("download-pdf-report-Box") ??
-        document.getElementById("deep-analysis-section");
-      scrollElementInMainContainer(element, {
-        behavior: "smooth",
-        block: "center",
-      });
-    }, delay);
-  };
-
-  // Jump to the Deep Analysis card with fresh data (notification tap / deep link)
-  const openDeepAnalysisSection = async () => {
+  // Refresh home report data after notification / deep link (no auto-scroll).
+  const refreshHealthReportOnHome = async () => {
     setCurrentView("main");
     handleGetHolisticPlanActionPlan();
     await refreshHtmlReport();
-    scrollToDeepAnalysis();
+  };
+
+  const refreshQuestionnairesOnHome = () => {
+    setCurrentView("main");
+    void handleGetAssignedQuestionaries();
   };
 
   useEffect(() => {
     const handleOpenHealthReport = () => {
-      void openDeepAnalysisSection();
+      void refreshHealthReportOnHome();
     };
     const handleHealthReportUpdated = () => {
       handleGetHolisticPlanActionPlan();
@@ -474,7 +465,7 @@ export default function YouMenu() {
     };
     const openQuestionnairesSection = () => {
       refreshQuestionnaires();
-      scrollToAssignedQuestionnaires();
+      refreshQuestionnairesOnHome();
     };
 
     subscribe("questionnairesUpdated", refreshQuestionnaires);
@@ -486,32 +477,29 @@ export default function YouMenu() {
     };
   }, []);
 
-  // Auto-scroll to the report when ?downloadReport / ?openReport is in the URL
+  // Notification deep links: land on home and refresh data (no auto-scroll).
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     if (
       urlParams.get("downloadReport") === "true" ||
       urlParams.get("openReport") === "1"
     ) {
-      // Drop the flag so going back to this page later doesn't jump again
       window.history.replaceState({}, "", window.location.pathname);
-      void openDeepAnalysisSection();
+      void refreshHealthReportOnHome();
     }
     if (urlParams.get("openQuestionnaires") === "1") {
       window.history.replaceState({}, "", window.location.pathname);
-      handleGetAssignedQuestionaries();
-      scrollToAssignedQuestionnaires(400);
+      refreshQuestionnairesOnHome();
     }
 
     CapacitorApp.addListener("appUrlOpen", (urlOpen: { url: string | URL }) => {
       const url = new URL(urlOpen.url);
       const key = url.searchParams.get("key");
       if (key === "downloadReport" || key === "openReport") {
-        void openDeepAnalysisSection();
+        void refreshHealthReportOnHome();
       }
       if (url.searchParams.get("openQuestionnaires") === "1") {
-        handleGetAssignedQuestionaries();
-        scrollToAssignedQuestionnaires(400);
+        refreshQuestionnairesOnHome();
       }
     });
   }, []);
@@ -560,17 +548,6 @@ export default function YouMenu() {
   const [chronologicalAge, setChronologicalAge] = useState(25);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-
-  const scrollToAssignedQuestionnaires = (delay = 200) => {
-    setCurrentView("main");
-    resetOuterAppScroll();
-    setTimeout(() => {
-      scrollElementInMainContainer(
-        document.getElementById("assigned-questionnaires"),
-        { behavior: "smooth", block: "start" },
-      );
-    }, delay);
-  };
 
   const handleUpgrade = () => {
     toast({
