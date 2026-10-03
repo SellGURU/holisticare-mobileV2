@@ -1,5 +1,6 @@
 import Application from "@/api/app";
 import { isPrivateHttpUrl } from "@/api/base";
+import { PAGE_SHELL } from "@/components/layout/page-chrome";
 import QuestionnairePlayer from "@/components/questionnaire/QuestionnairePlayer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -2294,7 +2295,7 @@ export default function YouMenu() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/90 pb-[calc(var(--nav-height)+1rem)] dark:bg-gray-950">
+    <div className={PAGE_SHELL}>
       <div className="mx-auto max-w-md px-4 py-5">
         {currentView === "main" && (
           <div className="mb-5">

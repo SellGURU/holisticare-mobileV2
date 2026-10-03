@@ -1,5 +1,9 @@
 import Application from "@/api/app";
-import { AppContext } from "@/store/app";
+import {
+  AppContext,
+  DEFAULT_CHAT_MODE,
+  type ChatMode,
+} from "@/store/app";
 import { useEffect, useState } from "react";
 
 function AppProvider({ children }: { children: React.ReactNode }) {
@@ -17,6 +21,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     scores: [] as Array<{ name?: string; score?: number | string | null }>,
     latest_date: null as string | null,
   });
+  const [chatMode, setChatMode] = useState<ChatMode>(DEFAULT_CHAT_MODE);
 
   useEffect(() => {
     Application.getBrandInfo()
@@ -52,6 +57,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
           focus_area: "",
         },
         wellnessScore: wellnessScore,
+        chatMode,
+        setChatMode,
       }}
     >
       {children}

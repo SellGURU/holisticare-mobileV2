@@ -34,6 +34,53 @@ export const FIXTURE_BRAND = {
 
 export const FIXTURE_TASK_TITLE = 'Cleanup Fixture Walk';
 
+function fixtureChatMessages() {
+  const yesterday = new Date();
+  yesterday.setHours(18, 0, 0, 0);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const today = new Date();
+  today.setHours(9, 15, 0, 0);
+
+  return [
+    {
+      conversation_id: 11,
+      date: yesterday.toISOString(),
+      message_text: 'Yesterday check-in',
+      sender_type: 'patient',
+      time: '18:00',
+      timestamp: yesterday.getTime(),
+      reported: false,
+    },
+    {
+      conversation_id: 12,
+      date: yesterday.toISOString(),
+      message_text: 'Noted, rest well.',
+      sender_type: 'ai',
+      time: '18:01',
+      timestamp: yesterday.getTime() + 60_000,
+      reported: false,
+    },
+    {
+      conversation_id: 13,
+      date: today.toISOString(),
+      message_text: 'How am I today?',
+      sender_type: 'patient',
+      time: '09:15',
+      timestamp: today.getTime(),
+      reported: false,
+    },
+    {
+      conversation_id: 14,
+      date: today.toISOString(),
+      message_text: 'You are on track.',
+      sender_type: 'ai',
+      time: '09:16',
+      timestamp: today.getTime() + 60_000,
+      reported: false,
+    },
+  ];
+}
+
 export const FIXTURE_WEEKLY_TASKS = [
   {
     date: '2026-08-01',
@@ -133,6 +180,23 @@ async function handleApi(route: Route) {
 
   if (path.includes('/mobile/get_html_report')) {
     return json(route, { html: null, available: false });
+  }
+
+  if (path.includes('get_messages_id')) {
+    return json(route, { conversation_id: 1, messages: fixtureChatMessages() });
+  }
+
+  if (
+    path.includes('/mobile_chat') &&
+    !path.includes('feedback') &&
+    !path.includes('report')
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return json(route, {
+      answer: 'Fixture copilot reply',
+      current_conversation_id: 15,
+      references: [],
+    });
   }
 
   if (path.includes('/health')) {

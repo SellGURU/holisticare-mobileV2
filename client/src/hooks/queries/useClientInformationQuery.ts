@@ -25,6 +25,7 @@ export type ClientInformation = {
   sex: string;
   verified_account: boolean;
   has_changed_password?: boolean;
+  picture?: string;
 };
 
 export function readStoredClientInformation(): ClientInformation | undefined {
@@ -38,7 +39,8 @@ export function readStoredClientInformation(): ClientInformation | undefined {
 
 export function writeStoredClientInformation(data: ClientInformation) {
   try {
-    localStorage.setItem(CLIENT_INFORMATION_STORAGE_KEY, JSON.stringify(data));
+    const { picture: _picture, ...rest } = data;
+    localStorage.setItem(CLIENT_INFORMATION_STORAGE_KEY, JSON.stringify(rest));
   } catch {
     // ignore storage write failures (private mode, quota, etc.)
   }

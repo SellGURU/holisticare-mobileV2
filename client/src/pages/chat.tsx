@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   BookOpen,
-  Bot,
+  Sparkles,
   CheckCheck,
   ExternalLink,
   Flag,
@@ -39,16 +39,20 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useChatViewport } from "@/hooks/use-keyboard-inset";
 import { useChatMessagesQuery } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
 import { openExternalUrl } from "@/lib/open-external-url";
-import { sortMessagesChronologically, formatMessageClock } from "@/lib/chatMessageOrder";
+import {
+  sortMessagesChronologically,
+  formatMessageClock,
+  formatChatDayLabel,
+  isSameChatDay,
+} from "@/lib/chatMessageOrder";
 import { subscribe, unsubscribe } from "@/lib/event";
-
-type ChatMode = "coach" | "ai";
+import { AppContext } from "@/store/app";
 type ChatReference = { text: string; filename: string; url?: string };
 
 const CLINIC_REF_NAMES = new Set([
@@ -151,7 +155,8 @@ const coaches: Coach[] = [
 ];
 
 export default function ChatPage() {
-  const [activeMode, setActiveMode] = useState<ChatMode>("coach");
+  const { chatMode: activeMode, setChatMode: setActiveMode } =
+    useContext(AppContext);
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(coaches[0]);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -173,6 +178,9 @@ export default function ChatPage() {
     useChatMessagesQuery(activeMode);
   const isInitialLoad = chatPending && chatData === undefined;
   const [isSending, setIsSending] = useState(false);
+  const [pendingReplyMode, setPendingReplyMode] = useState<"ai" | "coach" | null>(
+    null,
+  );
   const [messageReactions, setMessageReactions] = useState<
     Record<number, "liked" | "disliked" | null>
   >({});
@@ -275,22 +283,27 @@ export default function ChatPage() {
     return () => {
       unsubscribe("openCoachChat", openCoachChat);
     };
-  }, [queryClient]);
+  }, [queryClient, setActiveMode]);
 
   const patchChatMessages = (
     updater: (prev: { conversation_id: number; messages: any[] } | undefined) => {
       conversation_id: number;
       messages: any[];
     },
+    mode = activeMode,
   ) => {
-    queryClient.setQueryData(queryKeys.chatMessages(activeMode), updater);
+    queryClient.setQueryData(queryKeys.chatMessages(mode), updater);
   };
 
-  const sendMessage = () => {
-    if (!message.trim()) return;
+  const sendMessage = (rawText?: string) => {
+    const text = (typeof rawText === "string" ? rawText : message).trim();
+    if (!text) return;
 
-    const text = message;
+    const sendMode = activeMode;
     setIsSending(true);
+    if (sendMode === "ai") {
+      setPendingReplyMode("ai");
+    }
 
     const optimisticMessage: Message = {
       conversation_id: 0,
@@ -309,7 +322,7 @@ export default function ChatPage() {
     patchChatMessages((prev) => ({
       conversation_id: prev?.conversation_id ?? conversationId ?? 0,
       messages: [...(prev?.messages ?? []), optimisticMessage],
-    }));
+    }), sendMode);
     Application.sendMessage({
       conversation_id:
         messages
@@ -317,7 +330,7 @@ export default function ChatPage() {
             (msg) => msg.sender_type === "ai" || msg.sender_type === "coach"
           )
           .pop()?.conversation_id || 1,
-      message_to: activeMode,
+      message_to: sendMode,
       text,
     })
       .then((res) => {
@@ -326,7 +339,7 @@ export default function ChatPage() {
             conversation_id: res.data.current_conversation_id,
             date: new Date().toISOString(),
             message_text: res.data.answer,
-            sender_type: activeMode,
+            sender_type: sendMode,
             time: new Date().toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -339,7 +352,7 @@ export default function ChatPage() {
           patchChatMessages((prev) => ({
             conversation_id: res.data.current_conversation_id,
             messages: [...(prev?.messages ?? []), reply],
-          }));
+          }), sendMode);
         }
       })
       .catch((res) => {
@@ -351,6 +364,9 @@ export default function ChatPage() {
       })
       .finally(() => {
         setIsSending(false);
+        setPendingReplyMode((current) =>
+          current === sendMode ? null : current,
+        );
       });
   };
 
@@ -423,18 +439,19 @@ export default function ChatPage() {
 
     setIsRegenerating(true);
     setIsSending(true);
+    setPendingReplyMode("ai");
     patchChatMessages((prev) => ({
       conversation_id: prev?.conversation_id ?? conversationId ?? 0,
       messages: (prev?.messages ?? []).filter(
         (msg: Message) =>
           !(msg.conversation_id === messageId && msg.sender_type === "ai"),
       ),
-    }));
+    }), "ai");
 
     try {
       const res = await Application.sendMessage({
         conversation_id: lastUsedId,
-        message_to: activeMode,
+        message_to: "ai",
         text: userMessage.message_text,
       });
 
@@ -443,7 +460,7 @@ export default function ChatPage() {
           conversation_id: res.data.current_conversation_id,
           date: new Date().toISOString(),
           message_text: res.data.answer,
-          sender_type: activeMode,
+          sender_type: "ai",
           time: new Date().toLocaleTimeString(),
           reported: false,
           references: allowedChatReferences(res.data.references),
@@ -451,7 +468,7 @@ export default function ChatPage() {
         patchChatMessages((prev) => ({
           conversation_id: res.data.current_conversation_id,
           messages: [...(prev?.messages ?? []), newMessage],
-        }));
+        }), "ai");
       }
     } catch (error: any) {
       toast({
@@ -462,6 +479,7 @@ export default function ChatPage() {
       });
     } finally {
       setIsSending(false);
+      setPendingReplyMode((current) => (current === "ai" ? null : current));
     }
   };
 
@@ -626,9 +644,9 @@ export default function ChatPage() {
 
   const assistantIcon =
     activeMode === "coach" ? (
-      <User className="h-3.5 w-3.5 text-white" />
+      <User className="h-7 w-7 text-white" />
     ) : (
-      <Bot className="h-3.5 w-3.5 text-white" />
+      <Sparkles className="h-7 w-7 text-white" />
     );
   const assistantIconBg =
     activeMode === "coach"
@@ -665,20 +683,38 @@ export default function ChatPage() {
           )}
 
           {messages.length === 0 && !isInitialLoad && !isSending && (
-            <div className="flex flex-col items-center px-4 py-16 text-center">
+            <div className="flex flex-col items-center px-4 py-12 text-center">
               <span
-                className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${assistantIconBg}`}
+                className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full shadow-lg ${assistantIconBg}`}
               >
                 {assistantIcon}
               </span>
-              <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
-                {activeMode === "coach" ? "Health Coach" : "AI Copilot"}
+              <p className="text-[17px] font-semibold text-gray-900 dark:text-gray-100">
+                {activeMode === "coach" ? "Health Coach" : "Your Copilot"}
               </p>
-              <p className="mt-1 max-w-[16rem] text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">
+              <p className="mt-1 max-w-[18rem] text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">
                 {activeMode === "coach"
                   ? "Send a message to your health coach."
-                  : "Ask wellness questions about your own health data."}
+                  : "Your copilot for labs, plan, and everyday wellness questions."}
               </p>
+              {activeMode === "ai" && (
+                <div className="mt-5 flex w-full max-w-sm flex-col gap-2">
+                  {[
+                    "What should I focus on today?",
+                    "Explain my latest results",
+                    "How is my plan going?",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => sendMessage(prompt)}
+                      className="rounded-2xl border border-white/80 bg-white/90 px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 shadow-sm transition-colors hover:bg-white dark:border-white/10 dark:bg-[#1f2c33] dark:text-gray-200"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -698,16 +734,29 @@ export default function ChatPage() {
             const prev = msgIndex > 0 ? messages[msgIndex - 1] : null;
             const next =
               msgIndex < messages.length - 1 ? messages[msgIndex + 1] : null;
-            const stacked = prev?.sender_type === msg.sender_type;
-            const lastInStack = next?.sender_type !== msg.sender_type;
+            const sameDayAsPrev = Boolean(prev && isSameChatDay(prev, msg));
+            const sameDayAsNext = Boolean(next && isSameChatDay(next, msg));
+            const stacked =
+              prev?.sender_type === msg.sender_type && sameDayAsPrev;
+            const lastInStack =
+              next?.sender_type !== msg.sender_type || !sameDayAsNext;
+            const dayLabel = formatChatDayLabel(msg);
+            const showDayLabel = Boolean(dayLabel) && !sameDayAsPrev;
 
             return (
+              <div key={`${messageKey}-${msgIndex}`}>
+              {showDayLabel && (
+                <div className="mb-3 mt-3 flex justify-center first:mt-1">
+                  <span className="rounded-full bg-black/5 px-3 py-1 text-[11px] font-medium text-gray-500 dark:bg-white/10 dark:text-gray-400">
+                    {dayLabel}
+                  </span>
+                </div>
+              )}
               <div
-                key={`${messageKey}-${msgIndex}`}
                 className={`flex items-end gap-1.5 ${
                   isPatient ? "justify-end" : "justify-start"
                 } ${isReported ? "opacity-50" : ""} ${
-                  stacked ? "mt-2" : "mt-3.5 first:mt-0"
+                  stacked ? "mt-2" : showDayLabel ? "mt-0" : "mt-3.5 first:mt-0"
                 } ${msgIndex === messages.length - 1 ? "ui-bubble-in" : ""}`}
               >
                 <div
@@ -846,16 +895,18 @@ export default function ChatPage() {
                   )}
                 </div>
               </div>
+              </div>
             );
           })}
 
-          {isSending && messages.length > 0 && (
-            <div className="flex items-end justify-start pt-1">
-              <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-white px-3 py-2.5 shadow-sm dark:bg-[#1f2c33]">
-                <span className="flex items-center gap-1">
-                  <span className="chat-typing-dot h-1.5 w-1.5 rounded-full bg-gray-400" />
-                  <span className="chat-typing-dot h-1.5 w-1.5 rounded-full bg-gray-400" />
-                  <span className="chat-typing-dot h-1.5 w-1.5 rounded-full bg-gray-400" />
+          {pendingReplyMode === "ai" && activeMode === "ai" && (
+            <div
+              className="flex items-end justify-start pt-2"
+              data-testid="ai-thinking"
+            >
+              <div className="rounded-2xl rounded-bl-sm bg-white px-3 py-2 shadow-sm dark:bg-[#1f2c33]">
+                <span className="chat-thinking-label text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                  Thinking
                 </span>
               </div>
             </div>
@@ -878,7 +929,11 @@ export default function ChatPage() {
                 ref={textareaRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Message"
+                placeholder={
+                  activeMode === "ai"
+                    ? "Ask your copilot…"
+                    : "Message your coach"
+                }
                 rows={1}
                 className="max-h-28 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-0 py-2 text-[15px] shadow-none placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-transparent dark:placeholder:text-gray-500"
                 onFocus={handleInputFocus}
@@ -892,7 +947,7 @@ export default function ChatPage() {
             </div>
             <Button
               onMouseDown={(e) => e.preventDefault()}
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               disabled={!message.trim() || isSending}
               size="icon"
               aria-label="Send message"

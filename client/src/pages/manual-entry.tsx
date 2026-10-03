@@ -171,7 +171,7 @@ export default function ManualEntry() {
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 p-4">
         <div className="flex items-center">
-          <Link href="/">
+          <Link href="/you">
             <Button variant="ghost" size="sm" className="mr-4">
               <ArrowLeft className="w-5 h-5" />
             </Button>

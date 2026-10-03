@@ -1,3 +1,4 @@
+import { PAGE_SHELL, PageHeader } from "@/components/layout/page-chrome";
 import { useBiomarkersQuery } from "@/hooks/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -321,31 +322,22 @@ export default function Trends() {
   };
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 pb-8 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20">
+    <div className={PAGE_SHELL}>
       <div className="mx-auto w-full max-w-md px-4 py-4">
-        {/* Page header */}
         <div className="mb-5">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/20">
-              <FlaskConical className="h-5 w-5 text-white" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-                Your Results
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Biomarker insights from your latest tests
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            icon={FlaskConical}
+            eyebrow="Labs"
+            title="Your Results"
+            subtitle="Biomarker insights from your latest tests"
+          />
 
-          {/* Summary card */}
           {summary.total > 0 && (
-            <Card className="mb-4 overflow-hidden rounded-2xl border-0 bg-white/80 shadow-md backdrop-blur-sm dark:bg-gray-800/80">
+            <Card className="mb-4 rounded-2xl border-0 bg-white/80 shadow-md dark:bg-gray-800/80">
               <CardContent className="p-4">
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="rounded-xl bg-blue-50/80 px-2 py-2.5 dark:bg-blue-900/20">
-                    <p className="text-lg font-semibold text-blue-700 dark:text-blue-300">
+                  <div className="rounded-xl bg-slate-50 px-2 py-2.5 dark:bg-gray-900/40">
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                       {summary.total}
                     </p>
                     <p className="text-[11px] text-gray-500 dark:text-gray-400">

@@ -45,7 +45,13 @@ test.describe('Mobile-web cleanup smoke (Vite-only, offline mocks)', () => {
     await expect(page.locator('[data-bottom-nav]')).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.locator('[data-bottom-nav] a[href="/"]')).toBeVisible();
+    await expect(page).toHaveURL(/\/chat/, { timeout: 20_000 });
+    await expect(page.locator('[data-bottom-nav] a[href="/chat"]')).toBeVisible();
+    await expect(page.locator('[data-bottom-nav] a[href="/chat"]')).toHaveAttribute(
+      'aria-label',
+      'Copilot',
+    );
+    await expect(page.locator('[data-bottom-nav] a[href="/you"]')).toBeVisible();
     await expect(page.locator('[data-bottom-nav] a[href="/plan"]')).toBeVisible();
   });
 
@@ -70,15 +76,56 @@ test.describe('Mobile-web cleanup smoke (Vite-only, offline mocks)', () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test('M4: bottom-nav Home/Plan route behavior', async ({ page }) => {
+  test('M4: bottom-nav You/Plan/Chat route behavior', async ({ page }) => {
     await login(page);
     await expect(page.locator('[data-bottom-nav]')).toBeVisible({
       timeout: 20_000,
     });
     await clickBottomNav(page, '/plan');
     await expect(page).toHaveURL(/\/plan/);
-    await clickBottomNav(page, '/');
-    await expect(page).toHaveURL(/\/$/);
+    await clickBottomNav(page, '/you');
+    await expect(page).toHaveURL(/\/you/);
+    await clickBottomNav(page, '/chat');
+    await expect(page).toHaveURL(/\/chat/);
+  });
+
+  test('M6: chat header and bottom nav stay in sync', async ({ page }) => {
+    await login(page);
+    await expect(page).toHaveURL(/\/chat/, { timeout: 20_000 });
+    await expect(page.locator('[data-bottom-nav] a[href="/chat"]')).toHaveAttribute(
+      'aria-label',
+      'Copilot',
+    );
+    await expect(page.getByText('Always on').first()).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText('Yesterday', { exact: true })).toBeVisible();
+    await expect(page.getByText('Today', { exact: true })).toBeVisible();
+
+    await page.getByPlaceholder(/Ask your copilot/i).fill('What should I do next?');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByTestId('ai-thinking')).toBeVisible();
+
+    await page.getByRole('button', { name: /Always on/i }).click();
+    await page.getByRole('option', { name: /Health Coach/i }).click();
+
+    await expect(page.locator('[data-bottom-nav] a[href="/chat"]')).toHaveAttribute(
+      'aria-label',
+      'Coach',
+    );
+    await expect(page.getByText('Clinic coach').first()).toBeVisible();
+    await expect(page.getByTestId('ai-thinking')).toHaveCount(0);
+
+    await page.getByPlaceholder(/Message your coach/i).fill('Need some advice');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByTestId('ai-thinking')).toHaveCount(0);
+
+    await clickBottomNav(page, '/plan');
+    await expect(page).toHaveURL(/\/plan/);
+    await expect(page.locator('[data-bottom-nav] a[href="/chat"]')).toHaveAttribute(
+      'aria-label',
+      'Coach',
+    );
   });
 
   test('M5: notifications control is reachable from home shell', async ({

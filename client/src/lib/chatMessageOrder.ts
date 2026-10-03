@@ -51,3 +51,52 @@ export function sortMessagesChronologically<
     return Number(left.conversation_id || 0) - Number(right.conversation_id || 0);
   });
 }
+
+type ChatTimeFields = {
+  timestamp?: number | string | null;
+  date?: string | null;
+  time?: string | null;
+};
+
+export function calendarDayKey(value: Date | number = new Date()): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function messageDayKey(msg: ChatTimeFields): string | null {
+  const ms = messageTimeMs(msg);
+  if (!Number.isFinite(ms) || ms === Number.POSITIVE_INFINITY) return null;
+  return calendarDayKey(ms);
+}
+
+export function isSameChatDay(left: ChatTimeFields, right: ChatTimeFields): boolean {
+  const leftKey = messageDayKey(left);
+  const rightKey = messageDayKey(right);
+  return Boolean(leftKey && rightKey && leftKey === rightKey);
+}
+
+export function formatChatDayLabel(
+  msg: ChatTimeFields,
+  now: Date | number = new Date(),
+): string {
+  const key = messageDayKey(msg);
+  if (!key) return "";
+  const current = now instanceof Date ? now : new Date(now);
+  const todayKey = calendarDayKey(current);
+  const yesterday = new Date(current);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === todayKey) return "Today";
+  if (key === calendarDayKey(yesterday)) return "Yesterday";
+
+  const ms = messageTimeMs(msg);
+  const date = new Date(ms);
+  return date.toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() !== current.getFullYear() ? { year: "numeric" } : {}),
+  });
+}

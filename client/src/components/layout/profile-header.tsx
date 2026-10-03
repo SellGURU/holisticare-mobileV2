@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useContext } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { isUsableProfilePicture } from "@/lib/profilePicture";
 import {
   Bell,
   User,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/notificationActions";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
+import { AppContext } from "@/store/app";
 // import logoImage from "@assets/Logo5 2_1753791920091_1757240780580.png";
 
 type BrandInfo = {
@@ -82,6 +84,7 @@ export default function ProfileHeader() {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const queryClient = useQueryClient();
   const { data: clientInformation } = useClientInformationQuery();
+  const { setChatMode } = useContext(AppContext);
 
   const handleGetClientInformation = async () => {
     await queryClient.invalidateQueries({
@@ -245,27 +248,28 @@ export default function ProfileHeader() {
     if (notification.action === OPEN_QUESTIONNAIRES_ACTION) {
       setShowNotifications(false);
       publish("questionnairesUpdated", {});
-      if (location === "/") {
+      if (location === "/you") {
         publish("openQuestionnaires", {});
       } else {
-        navigate("/?openQuestionnaires=1");
+        navigate("/you?openQuestionnaires=1");
       }
       return;
     }
     if (notification.action === OPEN_CHAT_ACTION) {
       setShowNotifications(false);
+      setChatMode("coach");
       publish("openCoachChat", {});
-      if (location !== "/chat") {
+      if (location !== "/chat" && location !== "/") {
         navigate("/chat");
       }
       return;
     }
     if (notification.action !== OPEN_HEALTH_REPORT_ACTION) return;
     setShowNotifications(false);
-    if (location === "/") {
+    if (location === "/you") {
       publish("openHealthReport", {});
     } else {
-      navigate("/?openReport=1");
+      navigate("/you?openReport=1");
     }
   };
 
@@ -682,6 +686,13 @@ export default function ProfileHeader() {
           className="h-9 w-9 rounded-full p-0 hover:bg-transparent"
         >
           <Avatar className="h-9 w-9 ring-2 ring-gray-200 dark:ring-gray-700">
+            {isUsableProfilePicture(clientInformation?.picture) && (
+              <AvatarImage
+                src={clientInformation?.picture}
+                alt={clientInformation?.name || "Profile"}
+                className="object-cover"
+              />
+            )}
             <AvatarFallback
               className="text-[11px] font-semibold text-white"
               style={{ background: avatarGradient }}
@@ -702,6 +713,13 @@ export default function ProfileHeader() {
 
             <div className="flex flex-col items-center px-5 pb-4 pt-1 text-center">
               <Avatar className="h-16 w-16 ring-4 ring-white dark:ring-gray-900">
+                {isUsableProfilePicture(clientInformation?.picture) && (
+                  <AvatarImage
+                    src={clientInformation?.picture}
+                    alt={clientInformation?.name || "Profile"}
+                    className="object-cover"
+                  />
+                )}
                 <AvatarFallback
                   className="text-lg font-semibold text-white"
                   style={{ background: avatarGradient }}

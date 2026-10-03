@@ -1,4 +1,9 @@
 import Application from "@/api/app";
+import {
+  BrandWashCard,
+  PAGE_SHELL,
+  PageHeader,
+} from "@/components/layout/page-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -853,7 +858,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
   const showDevicesError = !showDevicesLoading && devicesLoadError;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/30 to-teal-50/40 pb-8 dark:from-gray-900 dark:via-emerald-900/20 dark:to-teal-900/10">
+    <div className={PAGE_SHELL}>
       {/* Sticky mobile header */}
       <div className="sticky top-0 z-20 border-b border-gray-200/50 bg-white/90 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/90">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-3">
@@ -890,22 +895,29 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
       </div>
 
       <div className="mx-auto max-w-md space-y-5 px-4 py-4">
-        {/* Hero + summary */}
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20">
-            <Watch className="h-5 w-5 text-white" />
-          </span>
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Sync steps, heart rate, sleep & more into your wellness profile.
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          className="mb-0"
+          icon={Watch}
+          eyebrow="Wearables"
+          title="Stay in sync"
+          subtitle="Sync steps, heart rate, sleep & more into your wellness profile."
+          percent={
+            totalSources
+              ? Math.round((connectedCount / totalSources) * 100)
+              : undefined
+          }
+        />
 
         {showDevicesContent && (
-          <Card className="rounded-2xl border-0 bg-white/80 shadow-md dark:bg-gray-800/80">
-            <CardContent className="grid grid-cols-2 gap-3 p-4">
-              <div className="rounded-xl bg-emerald-50/80 px-3 py-2.5 text-center dark:bg-emerald-900/20">
+          <BrandWashCard
+            percent={
+              totalSources
+                ? Math.round((connectedCount / totalSources) * 100)
+                : 0
+            }
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-white/70 px-3 py-2.5 text-center dark:bg-gray-900/30">
                 <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">
                   {connectedCount}
                 </p>
@@ -913,7 +925,7 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
                   Connected
                 </p>
               </div>
-              <div className="rounded-xl bg-gray-50/80 px-3 py-2.5 text-center dark:bg-gray-700/40">
+              <div className="rounded-xl bg-white/70 px-3 py-2.5 text-center dark:bg-gray-900/30">
                 <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">
                   {Math.max(totalSources - connectedCount, 0)}
                 </p>
@@ -921,8 +933,8 @@ This app uses Apple Health (HealthKit) to read and write your health data secure
                   Available
                 </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </BrandWashCard>
         )}
 
         {/* Privacy note */}

@@ -39,6 +39,14 @@ import {
 import AppProvider from "./components/layout/AppProvider";
 import { getErrorMessage } from "./lib/error-message";
 
+function RedirectHomeToChat() {
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    setLocation("/chat");
+  }, [setLocation]);
+  return null;
+}
+
 function Router() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -189,7 +197,8 @@ function Router() {
               <MobileLayout>
                 <Switch>
                   <Route path="/onboarding" component={Onboarding} />
-                  <Route path="/" component={YouMenu} />
+                  <Route path="/" component={RedirectHomeToChat} />
+                  <Route path="/you" component={YouMenu} />
                   <Route path="/dashboard" component={Dashboard} />
                   <Route path="/monitor" component={Trends} />
                   <Route path="/chat" component={ChatPage} />
@@ -204,7 +213,7 @@ function Router() {
                   <Route path="/manual-entry" component={ManualEntry} />
                   <Route path="/holistic-plans" component={HolisticPlans} />
                   <Route path="/not-found" component={NotFound} />
-                  <Route path="/auth" component={YouMenu} />
+                  <Route path="/auth" component={RedirectHomeToChat} />
                   <Route path="/wearable" component={WearableDashboard} />
                   <Route component={NotFound} />
                 </Switch>

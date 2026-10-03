@@ -1,3 +1,8 @@
+import {
+  BrandWashCard,
+  PAGE_SHELL,
+  PageHeader,
+} from "@/components/layout/page-chrome";
 import { useEducationalContentQuery } from "@/hooks/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -149,7 +154,7 @@ export default function EducationalPage() {
     );
   };
 
-  const pageShell = "min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 pb-8 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900/20";
+  const pageShell = PAGE_SHELL;
 
   if (currentView === "content" && selectedContent) {
     return (
@@ -219,25 +224,16 @@ export default function EducationalPage() {
   return (
     <div className={pageShell}>
       <div className="mx-auto w-full max-w-md px-4 py-4">
-        {/* Header */}
-        <div className="mb-5 flex items-center gap-3">
-          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/20">
-            <BookOpen className="h-5 w-5 text-white" />
-          </span>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              Learn
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Health & wellness articles
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          icon={BookOpen}
+          eyebrow="Library"
+          title="Learn"
+          subtitle="Health & wellness articles"
+        />
 
-        {/* Summary */}
         {!isLoading && educationalContent.length > 0 && (
-          <Card className="mb-4 rounded-2xl border-0 bg-white/80 shadow-md dark:bg-gray-800/80">
-            <CardContent className="flex items-center justify-between p-4">
+          <BrandWashCard className="mb-4">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Library
@@ -249,12 +245,12 @@ export default function EducationalPage() {
               </div>
               <Badge
                 variant="outline"
-                className="border-0 bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                className="border-0 bg-white/70 px-2.5 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800/70 dark:text-gray-200"
               >
                 Free to read
               </Badge>
-            </CardContent>
-          </Card>
+            </div>
+          </BrandWashCard>
         )}
 
         {/* Search */}

@@ -1,4 +1,5 @@
 import Application from "@/api/app";
+import { PAGE_SHELL, PageHeader } from "@/components/layout/page-chrome";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -320,7 +321,7 @@ export default function Profile() {
         // Also refresh auth service client information
         fetchClientInformation();
         
-        setLocation("/");
+        setLocation("/chat");
       } else {
         toast({
           title: "Password Change Failed",
@@ -571,16 +572,15 @@ export default function Profile() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50/90 pb-[calc(var(--nav-height)+1rem)] dark:bg-gray-950">
+    <div className={PAGE_SHELL}>
       <div className="mx-auto max-w-md space-y-5 px-4 py-5">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Profile
-          </h1>
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            Manage your account and preferences
-          </p>
-        </div>
+        <PageHeader
+          className="mb-0"
+          icon={User}
+          eyebrow="Account"
+          title="Profile"
+          subtitle="Manage your account and preferences"
+        />
 
         <ProfileInfo
           clientInformation={clientInformation}

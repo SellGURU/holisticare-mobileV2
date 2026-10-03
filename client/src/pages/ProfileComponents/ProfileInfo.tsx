@@ -1,4 +1,5 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { isUsableProfilePicture } from "@/lib/profilePicture";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -59,6 +60,13 @@ const ProfileInfo = ({
         <div className="-mt-10 flex flex-col items-center text-center">
           <div className="relative">
             <Avatar className="h-20 w-20 border-4 border-white shadow-lg dark:border-gray-900">
+              {isUsableProfilePicture(clientInformation?.picture) && (
+                <AvatarImage
+                  src={clientInformation.picture}
+                  alt={clientInformation?.name || "Profile"}
+                  className="object-cover"
+                />
+              )}
               <AvatarFallback
                 className="text-lg font-semibold text-white"
                 style={{

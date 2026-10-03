@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-message";
 import { Bell, Moon, Search, Sun } from "lucide-react";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import BottomNavigation from "./bottom-navigation";
 import ProfileHeader from "./profile-header";
@@ -30,6 +30,7 @@ import { Capacitor } from "@capacitor/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
 import { resetOuterAppScroll } from "@/lib/scrollIntoMainContainer";
+import { AppContext } from "@/store/app";
 interface MobileLayoutProps {
   children: ReactNode;
 }
@@ -37,6 +38,7 @@ interface MobileLayoutProps {
 export default function MobileLayout({ children }:MobileLayoutProps ) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { setChatMode } = useContext(AppContext);
   const [location, navigate] = useLocation();
   const [showSearch, setShowSearch] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -87,19 +89,20 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
         queryKey: queryKeys.assignedQuestionnaires,
       });
       publish("questionnairesUpdated", {});
-      if (location === "/") {
+      if (location === "/you") {
         publish("openQuestionnaires", {});
       } else {
-        navigate("/?openQuestionnaires=1");
+        navigate("/you?openQuestionnaires=1");
       }
     };
 
     const openCoachChat = () => {
+      setChatMode("coach");
       void queryClient.invalidateQueries({
         queryKey: queryKeys.chatMessages("coach"),
       });
       publish("openCoachChat", {});
-      if (location !== "/chat") {
+      if (location !== "/chat" && location !== "/") {
         navigate("/chat");
       }
     };
@@ -114,10 +117,10 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
         return;
       }
       if (!isReportPush(event)) return;
-      if (location === "/") {
+      if (location === "/you") {
         publish("openHealthReport", {});
       } else {
-        navigate("/?openReport=1");
+        navigate("/you?openReport=1");
       }
     };
     const handleReceived = (event: any) => {
@@ -149,7 +152,7 @@ export default function MobileLayout({ children }:MobileLayoutProps ) {
       unsubscribe("pushNotificationAction", handleActionPerformed);
       unsubscribe("pushNotificationReceived", handleReceived);
     };
-  }, [location, navigate, queryClient]);
+  }, [location, navigate, queryClient, setChatMode]);
 
   // Reset scroll position whenever the route changes so each page starts at top
   useEffect(() => {

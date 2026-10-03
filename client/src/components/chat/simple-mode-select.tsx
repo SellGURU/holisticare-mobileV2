@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Check, ChevronDown, User } from "lucide-react";
+import { Check, ChevronDown, Sparkles, User } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -17,16 +17,16 @@ const ITEMS: {
   status: string;
 }[] = [
   {
+    value: "ai",
+    title: "Copilot",
+    subtitle: "Your personal health copilot",
+    status: "Always on",
+  },
+  {
     value: "coach",
     title: "Health Coach",
     subtitle: "Messages from your clinic",
     status: "Clinic coach",
-  },
-  {
-    value: "ai",
-    title: "AI Copilot",
-    subtitle: "Ask about your own health data",
-    status: "Not a diagnosis",
   },
 ];
 
@@ -44,12 +44,12 @@ function ModeAvatar({
     <span
       className={`flex flex-shrink-0 items-center justify-center rounded-full text-white ${dim} ${
         mode === "ai"
-          ? "bg-gradient-to-br from-blue-500 to-indigo-600"
+          ? "bg-gradient-to-br from-blue-500 to-indigo-600 shadow-[0_6px_16px_rgba(79,70,229,0.35)]"
           : "bg-gradient-to-br from-emerald-500 to-teal-600"
       }`}
     >
       {mode === "ai" ? (
-        <Bot className={icon} />
+        <Sparkles className={icon} />
       ) : (
         <User className={icon} />
       )}

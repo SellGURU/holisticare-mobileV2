@@ -1,113 +1,172 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
-  Home,
-  Watch,
-  MessageCircle,
-  BookOpen,
-  Target,
   Activity,
+  BookOpen,
+  Sparkles,
+  Target,
+  User,
+  UserRound,
 } from "lucide-react";
-import { subscribe } from "@/lib/event";
-import { useState } from "react";
+import { hexToRgba, useBrandColors } from "./page-chrome";
+import { AppContext } from "@/store/app";
+import { useContext } from "react";
+
+const COACH_PRIMARY = "#10b981";
+const COACH_SECONDARY = "#0d9488";
 
 const navItems = [
-  { path: "/", icon: Home, label: "Home" },
-  // { path: "/wearable", icon: Watch, label: "Wellness" },
-  { path: "/monitor", icon: Activity, label: "Result" },
-  { path: "/chat", icon: MessageCircle, label: "Chat", isSpecial: true },
+  { path: "/you", icon: UserRound, label: "You" },
+  { path: "/monitor", icon: Activity, label: "Results" },
+  { path: "/chat", icon: Sparkles, label: "Copilot", featured: true },
   { path: "/plan", icon: Target, label: "Plan" },
-  { path: "/educational", icon: BookOpen, label: "Educational" },
-];
+  { path: "/educational", icon: BookOpen, label: "Learn" },
+] as const;
+
+function isActivePath(location: string, path: string) {
+  if (path === "/chat") {
+    return location === "/chat" || location === "/";
+  }
+  return location === path || location.startsWith(`${path}?`);
+}
 
 export default function BottomNavigation() {
   const [location] = useLocation();
-  const [brandInfo, setBrandInfo] = useState<{
-    last_update: string;
-    logo: string;
-    name: string;
-    headline: string;
-    primary_color: string;
-    secondary_color: string;
-    tone: string;
-    focus_area: string;
-  }>();
-  subscribe("brand_info", (data: any) => {
-    setBrandInfo(data.detail.information);
-  });
+  const { primary, secondary } = useBrandColors();
+  const { chatMode } = useContext(AppContext);
+  const isCoach = chatMode === "coach";
+  const featuredLabel = isCoach ? "Coach" : "Copilot";
+  const featuredPrimary = isCoach ? COACH_PRIMARY : primary;
+  const featuredSecondary = isCoach ? COACH_SECONDARY : secondary;
 
   return (
-    <div
+    <nav
       data-bottom-nav
-      className="dient-to-r sticky bottom-[env(safe-area-inset-bottom)] from-gray-50/90 via-white/90 to-gray-50/90 dark:from-gray-900/90 dark:via-gray-800/90 dark:to-gray-900/90 backdrop-blur-lg border-t border-gray-200/30 dark:border-gray-700/30 px-2 sm:px-6 py-2 sm:py-3 shadow-lg z-30"
+      className="sticky bottom-0 z-30 px-3 pt-5"
       style={{
-        bottom: `env(safe-area-inset-bottom)`,
+        paddingBottom: "max(0.4rem, env(safe-area-inset-bottom))",
       }}
     >
-      {/* <div className="max-w-md mx-auto px-2 sm:px-6 py-2 sm:py-3"> */}
-      <div className="flex items-center justify-around">
+      <div className="relative mx-auto flex max-w-lg items-end justify-between rounded-[28px] border border-white/70 bg-white/82 px-1.5 py-1.5 shadow-[0_10px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/80">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location === item.path;
+          const isActive = isActivePath(location, item.path);
+          const featured = "featured" in item && item.featured;
 
-          return (
-            <Link key={item.path} href={item.path}>
-              <button
-                className={cn(
-                  "ui-press flex flex-col items-center py-2 sm:py-3 px-1 sm:px-2 rounded-2xl transition-all duration-300",
-                  isActive
-                    ? "bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm shadow-lg transform scale-105"
-                    : "hover:bg-gray-100/50 dark:hover:bg-gray-700/30 hover:shadow-md",
-                  item.isSpecial && "transform scale-110"
-                )}
+          if (featured) {
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                aria-label={featuredLabel}
+                aria-current={isActive ? "page" : undefined}
+                className="relative z-10 -mt-6 flex min-w-[4.25rem] flex-col items-center"
               >
-                <div
-                  className={cn(
-                    "rounded-full p-2.5 sm:p-2 mb-1 transition-all duration-300",
-                    isActive
-                      ? `shadow-lg`
-                      : "bg-gray-200/50 dark:bg-gray-700/50"
-                  )}
-                  style={{
-                    background: isActive
-                      ? `linear-gradient(to right, ${
-                          brandInfo ? brandInfo?.primary_color : `#3b82f6`
-                        }, ${
-                          brandInfo ? brandInfo?.secondary_color : `#a855f7`
-                        })`
-                      : "",
-                  }}
-                >
-                  <Icon
-                    className={cn(
-                      isActive
-                        ? "text-white"
-                        : "text-gray-600 dark:text-gray-400",
-                      item.isSpecial
-                        ? "w-7 h-7 sm:w-6 sm:h-6"
-                        : "w-6 h-6 sm:w-5 sm:h-5"
-                    )}
-                  />
-                </div>
                 <span
                   className={cn(
-                    "text-xs font-medium transition-colors hidden sm:block",
-                    isActive
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-gray-600 dark:text-gray-400"
+                    "nav-copilot-orb ui-press relative flex h-14 w-14 items-center justify-center rounded-full text-white ring-[3px] ring-white transition-all dark:ring-gray-900",
+                    isActive && !isCoach && "nav-ai-orb nav-copilot-orb-active scale-105",
+                    isActive && isCoach && "scale-105",
                   )}
+                  style={
+                    isActive
+                      ? {
+                          background: `linear-gradient(160deg, ${hexToRgba(featuredPrimary, 0.95)} 0%, ${featuredPrimary} 42%, ${featuredSecondary} 100%)`,
+                          border: `2px solid ${hexToRgba(featuredPrimary, 0.85)}`,
+                          boxShadow: [
+                            `inset 0 2px 3px rgba(255,255,255,0.5)`,
+                            `inset 0 -5px 8px rgba(0,0,0,0.22)`,
+                            `0 1px 0 rgba(255,255,255,0.35)`,
+                            `0 8px 6px -2px ${hexToRgba(featuredPrimary, 0.28)}`,
+                            `0 14px 22px ${hexToRgba(featuredPrimary, 0.32)}`,
+                          ].join(", "),
+                        }
+                      : {
+                          background: `linear-gradient(160deg, ${hexToRgba(featuredPrimary, 0.92)} 0%, ${hexToRgba(featuredPrimary, 0.78)} 48%, ${hexToRgba(featuredSecondary, 0.7)} 100%)`,
+                          border: `2px solid ${hexToRgba(featuredPrimary, 0.8)}`,
+                          boxShadow: [
+                            `inset 0 2px 3px rgba(255,255,255,0.4)`,
+                            `inset 0 -4px 6px rgba(15,23,42,0.14)`,
+                            `0 1px 0 rgba(255,255,255,0.4)`,
+                            `0 8px 14px ${hexToRgba(featuredPrimary, 0.28)}`,
+                          ].join(", "),
+                        }
+                  }
+                >
+                  {!isCoach && (
+                    <span className="nav-copilot-globe-clip" aria-hidden>
+                      <span className="nav-copilot-globe" />
+                      <span className="nav-copilot-globe-light" />
+                    </span>
+                  )}
+                  {isCoach ? (
+                    <User
+                      className="relative z-10 h-6 w-6 drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]"
+                      strokeWidth={2.1}
+                    />
+                  ) : (
+                    <Sparkles
+                      className="relative z-10 h-6 w-6 drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]"
+                      strokeWidth={2.1}
+                    />
+                  )}
+                </span>
+                <span
+                  className="mt-1 text-[10px] font-semibold tracking-wide"
                   style={{
-                    color: isActive ? brandInfo?.primary_color : undefined,
+                    color: isActive
+                      ? featuredPrimary
+                      : hexToRgba(featuredPrimary, 0.88),
                   }}
+                >
+                  {featuredLabel}
+                </span>
+              </Link>
+            );
+          }
+
+          return (
+            <Link
+              key={item.path}
+              href={item.path}
+              aria-label={item.label}
+              aria-current={isActive ? "page" : undefined}
+              className="flex min-w-0 flex-1 flex-col items-center"
+            >
+              <span
+                className={cn(
+                  "ui-press flex flex-col items-center gap-0.5 rounded-2xl px-2 py-1 transition-colors",
+                  isActive
+                    ? "bg-black/[0.04] dark:bg-white/[0.06]"
+                    : "hover:bg-black/[0.03] dark:hover:bg-white/[0.04]",
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "h-[22px] w-[22px] transition-colors",
+                    isActive
+                      ? "text-gray-900 dark:text-white"
+                      : "text-gray-400 dark:text-gray-500",
+                  )}
+                  style={isActive ? { color: primary } : undefined}
+                  strokeWidth={isActive ? 2.3 : 1.9}
+                />
+                <span
+                  className={cn(
+                    "text-[10px] font-medium",
+                    isActive
+                      ? "text-gray-900 dark:text-white"
+                      : "text-gray-400 dark:text-gray-500",
+                  )}
+                  style={isActive ? { color: primary } : undefined}
                 >
                   {item.label}
                 </span>
-              </button>
+              </span>
             </Link>
           );
         })}
       </div>
-      {/* </div> */}
-    </div>
+    </nav>
   );
 }
