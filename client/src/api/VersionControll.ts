@@ -1,21 +1,19 @@
 import axios from "axios";
+import { resolveBaseEndPoint } from "@/api/base";
 
 class VersionControll {
-    protected static base_url: string =
-    'https://marketing-vercel-one.vercel.app/dashboard';
+  protected static get(url: string, config?: any) {
+    const response = axios.get(`${resolveBaseEndPoint()}${url}`, {
+      headers: {
+        "Content-Type": config?.headers?.["Content-Type"] || "application/json",
+      },
+    });
+    return response;
+  }
 
-    protected static get(url: string, config?: any) {
-        const response = axios.get(this.base_url + url, {
-        headers: {
-            "Content-Type": config?.headers?.["Content-Type"] || "application/json",
-        },
-        });
-        return response;
-    }    
-
-    public static getConfig= ()=>{
-        return this.get("/config");
-    }
+  public static getConfig = () => {
+    return this.get("/dashboard/config");
+  };
 }
 
 export default VersionControll;
