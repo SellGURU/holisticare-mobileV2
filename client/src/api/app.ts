@@ -6,6 +6,7 @@ interface SendMessageProps {
   images?: [];
   message_to: "ai" | "coach";
   text: string;
+  replied_conv_id?: number;
 }
 interface getExerciseFileProps {
   file_id: string;
@@ -29,6 +30,14 @@ class Application extends Api {
   }
   static sendMessage(data: SendMessageProps) {
     const response = this.post("/mobile_chat", data);
+    return response;
+  }
+  static deleteMessage(data: { conversation_id: number }) {
+    const response = this.post("/mobile_chat/delete_message", data);
+    return response;
+  }
+  static reactMessage(data: { conversation_id: number; emoji: string }) {
+    const response = this.post("/mobile_chat/react", data);
     return response;
   }
   static getBiomarkersData() {

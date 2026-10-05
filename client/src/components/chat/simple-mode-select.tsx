@@ -57,16 +57,35 @@ function ModeAvatar({
   );
 }
 
+function CoachPresence({ online }: { online: boolean }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 text-[12px] font-medium ${
+        online ? "text-[#12B76A]" : "text-gray-400 dark:text-gray-500"
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          online ? "bg-[#12B76A]" : "bg-gray-400"
+        }`}
+      />
+      {online ? "Online" : "Offline"}
+    </span>
+  );
+}
+
 export default function SimpleModeSelect({
   activeMode,
   setActiveMode,
   disabled = false,
   hideAi = false,
+  coachOnline = null,
 }: {
   activeMode: ChatMode;
   setActiveMode: (mode: ChatMode) => void;
   disabled?: boolean;
   hideAi?: boolean;
+  coachOnline?: boolean | null;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -83,11 +102,18 @@ export default function SimpleModeSelect({
       <div className="flex min-h-12 items-center gap-3 px-1">
         <ModeAvatar mode="coach" />
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-semibold text-gray-900 dark:text-gray-100">
-            {activeItem.title}
+          <p className="flex min-w-0 items-center gap-2 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+            <span className="truncate">{activeItem.title}</span>
+            {activeMode === "coach" && coachOnline != null && (
+              <CoachPresence online={coachOnline} />
+            )}
           </p>
           <p className="truncate text-[12px] text-gray-500 dark:text-gray-400">
-            {activeItem.status}
+            {activeMode === "coach" && coachOnline != null
+              ? coachOnline
+                ? "Available now"
+                : "Currently away"
+              : activeItem.status}
           </p>
         </div>
       </div>
@@ -106,11 +132,18 @@ export default function SimpleModeSelect({
       >
         <ModeAvatar mode={activeMode} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
-            {activeItem.title}
+          <p className="flex min-w-0 items-center gap-2 text-[15px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
+            <span className="truncate">{activeItem.title}</span>
+            {activeMode === "coach" && coachOnline != null && (
+              <CoachPresence online={coachOnline} />
+            )}
           </p>
           <p className="truncate text-[12px] leading-tight text-gray-500 dark:text-gray-400">
-            {activeItem.status}
+            {activeMode === "coach" && coachOnline != null
+              ? coachOnline
+                ? "Available now"
+                : "Currently away"
+              : activeItem.status}
           </p>
         </div>
         <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -156,8 +189,11 @@ export default function SimpleModeSelect({
                 >
                   <ModeAvatar mode={it.value} size="lg" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
-                      {it.title}
+                    <p className="flex items-center gap-2 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+                      <span>{it.title}</span>
+                      {it.value === "coach" && coachOnline != null && (
+                        <CoachPresence online={coachOnline} />
+                      )}
                     </p>
                     <p className="mt-0.5 text-[12px] leading-snug text-gray-500 dark:text-gray-400">
                       {it.subtitle}

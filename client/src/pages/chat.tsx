@@ -26,16 +26,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   BookOpen,
+  Copy,
   Sparkles,
   CheckCheck,
   ExternalLink,
   Flag,
   Loader2,
   MoreVertical,
+  Reply,
   RotateCcw,
   Send,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -56,6 +59,18 @@ import {
   reactionsFromMessages,
   type ChatReaction,
 } from "@/lib/chatFeedback";
+import {
+  applyDeletedPlaceholder,
+  canDeleteCoachChatMessage,
+  canReactToCoachChatMessage,
+  copyChatText,
+  CHAT_REACTION_EMOJIS,
+  messageDomId,
+  replyPreviewTitle,
+  toggleReactionSummaries,
+  type CoachChatReaction,
+  type CoachReplyPreview,
+} from "@/lib/coachChatActions";
 import { subscribe, unsubscribe } from "@/lib/event";
 import { AppContext } from "@/store/app";
 type ChatReference = { text: string; filename: string; url?: string };
@@ -118,8 +133,11 @@ interface Message {
   feedback?: string;
   images?: string[];
   message_text: string;
-  replied_message_id?: string;
+  replied_message_id?: number | string | null;
   reported: boolean;
+  deleted?: boolean;
+  reply_preview?: CoachReplyPreview | null;
+  reactions?: CoachChatReaction[];
   sender_iamge?: string;
   sender_id?: string;
   sender_name?: string;
@@ -199,6 +217,8 @@ export default function ChatPage() {
   const [reportReason, setReportReason] = useState("");
   const [reportDetails, setReportDetails] = useState("");
   const [showReportModal, setShowReportModal] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const [showReferencesModal, setShowReferencesModal] = useState(false);
   const [selectedReferences, setSelectedReferences] = useState<ChatReference[]>(
     []
@@ -269,6 +289,8 @@ export default function ChatPage() {
     setDisplayedMessages({});
     setPreviousCount(0);
     lastMessageIdRef.current = null;
+    setReplyingTo(null);
+    setHighlightedId(null);
   }, [activeMode]);
 
   useEffect(() => {
@@ -291,7 +313,16 @@ export default function ChatPage() {
     },
     mode = activeMode,
   ) => {
-    queryClient.setQueryData(queryKeys.chatMessages(mode), updater);
+    queryClient.setQueryData(queryKeys.chatMessages(mode), (prev: any) => {
+      const next = updater(prev);
+      return {
+        you: prev?.you,
+        peer: prev?.peer,
+        ...next,
+        you: next.you ?? prev?.you,
+        peer: next.peer ?? prev?.peer,
+      };
+    });
   };
 
   const sendMessage = (rawText?: string) => {
@@ -304,6 +335,7 @@ export default function ChatPage() {
       setPendingReplyMode("ai");
     }
 
+    const replyTarget = sendMode === "coach" ? replyingTo : null;
     const optimisticMessage: Message = {
       conversation_id: 0,
       date: new Date().toISOString(),
@@ -316,8 +348,21 @@ export default function ChatPage() {
       }),
       timestamp: Date.now(),
       reported: false,
+      replied_message_id: replyTarget?.conversation_id ?? null,
+      reply_preview: replyTarget
+        ? {
+            conversation_id: replyTarget.conversation_id,
+            message_text: replyTarget.deleted ? "" : replyTarget.message_text,
+            sender_type: replyTarget.sender_type,
+            deleted: Boolean(replyTarget.deleted),
+            name: replyTarget.sender_name,
+          }
+        : null,
     };
     setMessage("");
+    if (sendMode === "coach") {
+      setReplyingTo(null);
+    }
     patchChatMessages((prev) => ({
       conversation_id: prev?.conversation_id ?? conversationId ?? 0,
       messages: [...(prev?.messages ?? []), optimisticMessage],
@@ -331,6 +376,7 @@ export default function ChatPage() {
           .pop()?.conversation_id || 1,
       message_to: sendMode,
       text,
+      replied_conv_id: replyTarget?.conversation_id,
     })
       .then((res) => {
         if (res.data?.answer) {
@@ -395,13 +441,118 @@ export default function ChatPage() {
         description: "We're glad this response was helpful.",
       });
       Application.feeedBack("like", conversationId);
-    } else if (payload === "dislike") {
+    } else     if (payload === "dislike") {
       toast({
         title: "Feedback received",
         description: "We'll work to improve our responses.",
       });
       Application.feeedBack("dislike", conversationId);
     }
+  };
+
+  const handleCoachEmojiReaction = (target: Message, emoji: string) => {
+    if (!target.conversation_id || target.deleted) return;
+    if (!canReactToCoachChatMessage(target)) return;
+    const previous = target.reactions || [];
+    const next = toggleReactionSummaries(previous, emoji);
+    patchChatMessages((prev) => ({
+      conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+      messages: (prev?.messages ?? []).map((msg: Message) =>
+        msg.conversation_id === target.conversation_id
+          ? { ...msg, reactions: next }
+          : msg,
+      ),
+    }));
+    Application.reactMessage({
+      conversation_id: target.conversation_id,
+      emoji,
+    })
+      .then((res) => {
+        if (Array.isArray(res.data?.reactions)) {
+          patchChatMessages((prev) => ({
+            conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+            messages: (prev?.messages ?? []).map((msg: Message) =>
+              msg.conversation_id === target.conversation_id
+                ? { ...msg, reactions: res.data.reactions }
+                : msg,
+            ),
+          }));
+        }
+      })
+      .catch((error: any) => {
+        patchChatMessages((prev) => ({
+          conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+          messages: (prev?.messages ?? []).map((msg: Message) =>
+            msg.conversation_id === target.conversation_id
+              ? { ...msg, reactions: previous }
+              : msg,
+          ),
+        }));
+        toast({
+          title: "Error",
+          description: error.response?.data?.detail || "Couldn’t add that reaction.",
+          variant: "destructive",
+        });
+      });
+  };
+
+  const handleDeleteCoachMessage = (target: Message) => {
+    if (!canDeleteCoachChatMessage(target)) return;
+    const previous = target;
+    patchChatMessages((prev) => ({
+      conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+      messages: (prev?.messages ?? []).map((msg: Message) =>
+        msg.conversation_id === target.conversation_id &&
+        msg.sender_type === "patient"
+          ? applyDeletedPlaceholder(msg)
+          : msg,
+      ),
+    }));
+    Application.deleteMessage({ conversation_id: target.conversation_id }).catch(
+      (error: any) => {
+        patchChatMessages((prev) => ({
+          conversation_id: prev?.conversation_id ?? conversationId ?? 0,
+          messages: (prev?.messages ?? []).map((msg: Message) =>
+            msg.conversation_id === target.conversation_id &&
+            msg.sender_type === "patient"
+              ? previous
+              : msg,
+          ),
+        }));
+        toast({
+          title: "Error",
+          description: error.response?.data?.detail || "Couldn’t delete that message.",
+          variant: "destructive",
+        });
+      },
+    );
+  };
+
+  const handleCopyMessage = async (text?: string) => {
+    const copied = await copyChatText(text || "");
+    toast({
+      title: copied ? "Copied" : "Couldn’t copy",
+      description: copied
+        ? "Message copied to clipboard."
+        : "Copy is not available right now.",
+      variant: copied ? "default" : "destructive",
+    });
+  };
+
+  const jumpToReply = (conversationId: number) => {
+    const node = document.getElementById(messageDomId(conversationId));
+    if (!node) {
+      toast({
+        title: "Original message not found",
+        description: "That message is no longer in this chat history.",
+      });
+      return;
+    }
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedId(conversationId);
+    window.setTimeout(() => {
+      setHighlightedId((current) => (current === conversationId ? null : current));
+    }, 1800);
   };
 
   const handleMessageMenu = (messageId: number) => {
@@ -677,6 +828,13 @@ export default function ChatPage() {
           <SimpleModeSelect
             activeMode={activeMode}
             setActiveMode={setActiveMode}
+            coachOnline={
+              activeMode === "coach" &&
+              (chatData as any)?.peer &&
+              (chatData as any).peer.visible !== false
+                ? Boolean((chatData as any).peer.online)
+                : null
+            }
           />
         </div>
 
@@ -698,8 +856,21 @@ export default function ChatPage() {
               >
                 {assistantIcon}
               </span>
-              <p className="text-[17px] font-semibold text-gray-900 dark:text-gray-100">
+              <p className="flex items-center justify-center gap-2 text-[17px] font-semibold text-gray-900 dark:text-gray-100">
                 {activeMode === "coach" ? "Health Coach" : "Your Copilot"}
+                {activeMode === "coach" &&
+                  (chatData as any)?.peer &&
+                  (chatData as any).peer.visible !== false && (
+                  <span
+                    className={`text-[13px] font-medium ${
+                      (chatData as any).peer.online
+                        ? "text-[#12B76A]"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {(chatData as any).peer.online ? "Online" : "Offline"}
+                  </span>
+                )}
               </p>
               <p className="mt-1 max-w-[18rem] text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">
                 {activeMode === "coach"
@@ -773,10 +944,19 @@ export default function ChatPage() {
                 </div>
               )}
               <div
-                className={`flex items-end gap-1.5 ${
+                id={
+                  activeMode === "coach"
+                    ? messageDomId(msg.conversation_id)
+                    : undefined
+                }
+                className={`flex items-end gap-1.5 rounded-xl transition-colors ${
                   isPatient ? "justify-end" : "justify-start"
                 } ${isReported ? "opacity-50" : ""} ${
                   msgIndex === messages.length - 1 ? "ui-bubble-in" : ""
+                } ${
+                  highlightedId === msg.conversation_id
+                    ? "bg-[#00a8841a] ring-1 ring-[#00a884]/30"
+                    : ""
                 }`}
               >
                 <div
@@ -786,7 +966,9 @@ export default function ChatPage() {
                 >
                   <div
                     className={`px-2.5 pb-1.5 pt-1.5 shadow-sm ${
-                      isPatient
+                      msg.deleted
+                        ? "border border-dashed border-gray-300 bg-white/70 italic text-gray-500 dark:border-white/10 dark:bg-[#1f2c33] dark:text-gray-400 rounded-2xl"
+                        : isPatient
                         ? `bg-[#d9fdd3] text-gray-900 dark:bg-[#005c4b] dark:text-gray-50 ${
                             lastInStack
                               ? "rounded-2xl rounded-br-sm"
@@ -799,10 +981,30 @@ export default function ChatPage() {
                           }`
                     }`}
                   >
+                    {!msg.deleted && msg.reply_preview && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          jumpToReply(msg.reply_preview!.conversation_id)
+                        }
+                        className="mb-1.5 w-full rounded-lg border-l-2 border-[#00a884] bg-black/5 px-2 py-1 text-left dark:bg-white/10"
+                      >
+                        <p className="truncate text-[11px] font-medium text-[#008f72] dark:text-[#25d366]">
+                          {replyPreviewTitle(msg.reply_preview)}
+                        </p>
+                        <p className="line-clamp-2 text-[12px] text-gray-600 dark:text-gray-300">
+                          {msg.reply_preview.deleted
+                            ? "This message was deleted"
+                            : msg.reply_preview.message_text}
+                        </p>
+                      </button>
+                    )}
                     <div className="whitespace-pre-wrap break-words text-[14.5px] leading-[1.45] [overflow-wrap:break-word]">
-                      {isAI
-                        ? formatText(aiBody)
-                        : formatText(msg.message_text, false)}
+                      {msg.deleted
+                        ? "This message was deleted"
+                        : isAI
+                          ? formatText(aiBody)
+                          : formatText(msg.message_text, false)}
                     </div>
                     <div className="mt-0.5 flex items-center justify-end gap-1">
                       <span
@@ -828,6 +1030,99 @@ export default function ChatPage() {
                       )}
                     </div>
                   </div>
+
+                  {activeMode === "coach" && !msg.deleted && (
+                    <div
+                      className={`mt-0.5 flex items-center gap-1 ${
+                        isPatient ? "flex-row-reverse justify-start" : "justify-start"
+                      }`}
+                    >
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 shrink-0 rounded-full p-0 text-gray-400 hover:bg-white/80 dark:hover:bg-white/10"
+                            aria-label="Message actions"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align={isPatient ? "end" : "start"}
+                          className="w-52 rounded-xl"
+                        >
+                          {canReactToCoachChatMessage(msg) && (
+                            <div className="flex items-center justify-between px-1 py-0.5">
+                              {CHAT_REACTION_EMOJIS.map((emoji) => (
+                                <DropdownMenuItem
+                                  key={emoji}
+                                  className="h-7 w-7 justify-center rounded-full p-0 text-base"
+                                  onSelect={() =>
+                                    handleCoachEmojiReaction(msg, emoji)
+                                  }
+                                  aria-label={`React with ${emoji}`}
+                                >
+                                  {emoji}
+                                </DropdownMenuItem>
+                              ))}
+                            </div>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setReplyingTo(msg);
+                              textareaRef.current?.focus();
+                            }}
+                          >
+                            <Reply className="mr-2 h-4 w-4" />
+                            Reply
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleCopyMessage(msg.message_text)}
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copy
+                          </DropdownMenuItem>
+                          {canDeleteCoachChatMessage(msg) && (
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteCoachMessage(msg)}
+                              className="text-red-600 dark:text-red-400"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      {(msg.reactions?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {msg.reactions?.map((reaction) => {
+                            const chipClass = `rounded-full border px-1.5 py-0.5 text-[11px] ${
+                              reaction.mine
+                                ? "border-[#00a884] bg-[#00a8841a] text-gray-800 dark:text-gray-100"
+                                : "border-gray-200 bg-white text-gray-600 dark:border-white/10 dark:bg-[#1f2c33] dark:text-gray-300"
+                            }`;
+                            return canReactToCoachChatMessage(msg) ? (
+                              <button
+                                key={reaction.emoji}
+                                type="button"
+                                onClick={() =>
+                                  handleCoachEmojiReaction(msg, reaction.emoji)
+                                }
+                                className={chipClass}
+                              >
+                                {reaction.emoji} {reaction.count}
+                              </button>
+                            ) : (
+                              <span key={reaction.emoji} className={chipClass}>
+                                {reaction.emoji} {reaction.count}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {isAI && !isReported && (
                     <div className="mt-0.5 flex items-center gap-0.5 pl-0.5">
@@ -889,6 +1184,14 @@ export default function ChatPage() {
                           align="start"
                           className="w-44 rounded-xl"
                         >
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleCopyMessage(aiBody || msg.message_text)
+                            }
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copy
+                          </DropdownMenuItem>
                           {isLastAIMessage ? (
                             <DropdownMenuItem
                               onClick={() =>
@@ -943,6 +1246,35 @@ export default function ChatPage() {
               : "max(0.4rem, env(safe-area-inset-bottom))",
           }}
         >
+          {activeMode === "coach" && replyingTo && (
+            <div className="mb-1.5 flex items-center justify-between rounded-xl border-l-4 border-[#00a884] bg-white px-3 py-2 dark:bg-[#2a3942]">
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-medium text-[#008f72] dark:text-[#25d366]">
+                  {replyPreviewTitle({
+                    conversation_id: replyingTo.conversation_id,
+                    message_text: replyingTo.message_text,
+                    sender_type: replyingTo.sender_type,
+                    deleted: Boolean(replyingTo.deleted),
+                    name: replyingTo.sender_name,
+                  })}
+                </p>
+                <p className="truncate text-[12px] text-gray-500 dark:text-gray-400">
+                  {replyingTo.deleted
+                    ? "This message was deleted"
+                    : replyingTo.message_text}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-full"
+                onClick={() => setReplyingTo(null)}
+                aria-label="Cancel reply"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <div className="flex min-w-0 flex-1 items-end rounded-[22px] bg-white px-3.5 py-0.5 shadow-sm dark:bg-[#2a3942]">
               <Textarea
