@@ -222,7 +222,7 @@ async function login(page: Page) {
 
 async function closeSheet(page: Page) {
   const dialog = page.getByRole("dialog");
-  await page.mouse.click(24, 24);
+  await dialog.getByRole("button", { name: "Close" }).click();
   await expect(dialog).toHaveCount(0);
 }
 
@@ -273,6 +273,7 @@ test.describe("Plan tasks UX", () => {
 
     await page.getByText("Kegel Routine").click();
     const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("button", { name: "Close" })).toBeVisible();
     await expect(sheet.getByText("How to do it")).toBeVisible();
     await expect(
       sheet.getByText("Do the contractions shown in the video")
