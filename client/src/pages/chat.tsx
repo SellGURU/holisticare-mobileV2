@@ -400,10 +400,12 @@ export default function ChatPage() {
           }), sendMode);
         }
       })
-      .catch((res) => {
+      .catch((error) => {
         toast({
           title: "Error",
-          description: res.response.data.detail,
+          description:
+            error?.response?.data?.detail ||
+            "The message could not be sent. Please try again.",
           variant: "destructive",
         });
       })

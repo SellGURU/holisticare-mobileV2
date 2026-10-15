@@ -29,7 +29,7 @@ class Application extends Api {
     return response;
   }
   static sendMessage(data: SendMessageProps) {
-    const response = this.post("/mobile_chat", data);
+    const response = this.post("/mobile_chat", data, { timeout: 90000 });
     return response;
   }
   static deleteMessage(data: { conversation_id: number }) {
